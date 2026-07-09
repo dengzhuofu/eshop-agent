@@ -18,8 +18,8 @@
 ```powershell
 cd backend
 python -m pip install -r requirements.txt
-pytest -v
-uvicorn app.main:app --reload
+python -m pytest -v
+python -m uvicorn app.main:app --reload
 ```
 
 ## Environment
@@ -28,9 +28,41 @@ uvicorn app.main:app --reload
 
 See `.env.example` for supported variables.
 
+## Implemented API
+
+```text
+GET  /health
+GET  /marketplaces/{marketplace}/rules
+POST /workflows
+```
+
+Example workflow request:
+
+```json
+{
+  "product_idea": "foldable under-bed storage organizer",
+  "target_marketplaces": ["amazon", "shopify", "tiktok_shop"],
+  "target_price": 29.99,
+  "risk_preference": "balanced"
+}
+```
+
+The current workflow endpoint returns a deterministic preview with profit estimate, marketplace listing validations, and approval requirement metadata. It does not publish to real platforms.
+
+## Progress Logs
+
+每完成一个开发节点，都会在 `docs/progress/` 下生成总结日志，记录目标、完成内容、验证命令、提交号和下一节点。
+
+Current nodes:
+
+- Node 01: repository bootstrap and health API
+- Node 02: SiliconFlow-compatible model configuration
+- Node 03: mock marketplace adapters
+- Node 04: deterministic business services
+- Node 05: tool registry and workflow preview API
+
 ## Product Document
 
 中文 PRD 位于：
 
 `outputs/跨境电商全链路Agent平台-PRD.md`
-
