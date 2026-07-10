@@ -33,6 +33,9 @@ def test_create_workflow_returns_deterministic_preview():
     assert data["workflow_id"].startswith("wf_")
     assert data["state"] == "awaiting_approval"
     assert data["approval_required"] is True
+    assert data["approval_request_id"].startswith("appr_")
+    assert data["approval_request"]["status"] == "pending"
+    assert data["approval_request"]["workflow_id"] == data["workflow_id"]
     assert data["profit_estimate"]["landed_cost"] == 12.8
     assert len(data["listing_validations"]) == 3
     assert {item["marketplace"] for item in data["listing_validations"]} == {

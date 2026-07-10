@@ -2,6 +2,7 @@ from app.adapters.mock_marketplaces import get_mock_adapter
 from app.agents.graphs.state import CommerceAgentState
 from app.domain.enums import AgentRole, Marketplace, RiskLevel, WorkflowState
 from app.domain.schemas import ListingDraft
+from app.repositories.approvals import get_approval_repository
 from app.services.profit import ProfitInput, estimate_profit
 
 
@@ -127,11 +128,28 @@ def risk_review_node(state: CommerceAgentState) -> dict:
 
 
 def await_approval_node(state: CommerceAgentState) -> dict:
+    approval_id = f"appr_{state['workflow_id']}"
+    approval = get_approval_repository().upsert_pending(
+        approval_id=approval_id,
+        workflow_id=state["workflow_id"],
+        tenant_id=state["tenant_id"],
+        requested_by=AgentRole.SUPERVISOR.value,
+        reason_codes=state["approval_reasons"],
+        risk_level=state["risk_level"],
+        resource_type="workflow",
+        resource_id=state["workflow_id"],
+        metadata={
+            "tool": "publish_listing",
+            "product_idea": state["product_idea"],
+            "target_marketplaces": state["target_marketplaces"],
+        },
+    )
     return {
         "current_agent": AgentRole.SUPERVISOR,
         "current_step": WorkflowState.AWAITING_APPROVAL,
         "completed_steps": _append_step(state, "await_approval"),
-        "approval_request_id": f"appr_{state['workflow_id']}",
+        "approval_request_id": approval.id,
+        "approval_request": approval.model_dump(mode="json"),
     }
 
 

@@ -16,6 +16,7 @@ class CommerceAgentState(TypedDict):
     tool_calls: list[dict[str, Any]]
     approval_required: bool
     approval_request_id: str | None
+    approval_request: dict[str, Any]
     approval_reasons: list[str]
     risk_level: RiskLevel
     evidence: list[dict[str, Any]]
@@ -47,6 +48,7 @@ def create_initial_state(
         "tool_calls": [],
         "approval_required": False,
         "approval_request_id": None,
+        "approval_request": {},
         "approval_reasons": [],
         "risk_level": RiskLevel.LOW,
         "evidence": [],

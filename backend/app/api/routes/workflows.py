@@ -46,6 +46,8 @@ def create_workflow(request: WorkflowCreateRequest) -> dict:
         "profit_estimate": state["profit_estimate"],
         "listing_validations": state["listing_validations"],
         "approval_required": state["approval_required"],
+        "approval_request_id": state["approval_request_id"],
+        "approval_request": state["approval_request"],
         "approval_reasons": state["approval_reasons"],
         "completed_steps": state["completed_steps"],
     }

@@ -1,5 +1,6 @@
 from app.agents.graphs.workflows.product_launch import run_product_launch_preview
 from app.domain.enums import Marketplace, WorkflowState
+from app.repositories.approvals import get_approval_repository
 
 
 def test_product_launch_graph_routes_to_awaiting_approval():
@@ -64,3 +65,26 @@ def test_product_launch_graph_records_profit_and_listing_validations():
         "tiktok_shop",
     }
     assert all(item["valid"] is True for item in state["listing_validations"])
+
+
+def test_product_launch_graph_creates_retrievable_approval_request():
+    repo = get_approval_repository()
+    repo.clear()
+
+    state = run_product_launch_preview(
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+
+    approval_id = state["approval_request_id"]
+    request = repo.get(approval_id)
+
+    assert request is not None
+    assert request.workflow_id == "wf_test"
+    assert request.tenant_id == "tenant-a"
+    assert request.reason_codes == ["publish_listing"]
+    assert state["approval_request"]["status"] == "pending"

@@ -251,6 +251,7 @@ Expected: PASS.
 ```python
 from fastapi.testclient import TestClient
 
+from app.domain.enums import RiskLevel
 from app.main import create_app
 from app.repositories.approvals import get_approval_repository
 
@@ -258,18 +259,20 @@ from app.repositories.approvals import get_approval_repository
 def test_approval_api_lists_gets_and_approves_request():
     repo = get_approval_repository()
     repo.clear()
+    repo.upsert_pending(
+        approval_id="appr_wf_test",
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        requested_by="supervisor",
+        reason_codes=["publish_listing"],
+        risk_level=RiskLevel.HIGH,
+        resource_type="workflow",
+        resource_id="wf_test",
+        metadata={"tool": "publish_listing"},
+    )
     client = TestClient(create_app())
 
-    workflow_response = client.post(
-        "/workflows",
-        json={
-            "product_idea": "foldable under-bed storage organizer",
-            "target_marketplaces": ["amazon"],
-            "target_price": 29.99,
-            "risk_preference": "balanced",
-        },
-    )
-    approval_id = workflow_response.json()["approval_request_id"]
+    approval_id = "appr_wf_test"
 
     listing = client.get("/approvals")
     detail = client.get(f"/approvals/{approval_id}")
@@ -288,21 +291,23 @@ def test_approval_api_lists_gets_and_approves_request():
 def test_approval_api_returns_404_and_409_for_invalid_transitions():
     repo = get_approval_repository()
     repo.clear()
+    repo.upsert_pending(
+        approval_id="appr_wf_test",
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        requested_by="supervisor",
+        reason_codes=["publish_listing"],
+        risk_level=RiskLevel.HIGH,
+        resource_type="workflow",
+        resource_id="wf_test",
+        metadata={},
+    )
     client = TestClient(create_app())
 
     missing = client.get("/approvals/appr_missing")
     assert missing.status_code == 404
 
-    workflow_response = client.post(
-        "/workflows",
-        json={
-            "product_idea": "foldable under-bed storage organizer",
-            "target_marketplaces": ["amazon"],
-            "target_price": 29.99,
-            "risk_preference": "balanced",
-        },
-    )
-    approval_id = workflow_response.json()["approval_request_id"]
+    approval_id = "appr_wf_test"
     client.post(f"/approvals/{approval_id}/reject", json={"reviewer_id": "ops-lead"})
 
     conflict = client.post(f"/approvals/{approval_id}/approve", json={"reviewer_id": "ops-lead"})
