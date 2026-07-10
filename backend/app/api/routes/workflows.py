@@ -9,6 +9,7 @@ from app.agents.graphs.workflows.product_launch import (
 )
 from app.domain.enums import Marketplace, WorkflowState
 from app.repositories.approvals import get_approval_repository
+from app.repositories.events import TraceEventConflictError, get_trace_event_repository
 from app.repositories.snapshots import get_workflow_snapshot_repository
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -90,4 +91,17 @@ def resume_workflow(workflow_id: str, request: WorkflowResumeRequest) -> dict:
         "publish_results": state["publish_results"],
         "tool_calls": state["tool_calls"],
         "completed_steps": state["completed_steps"],
+    }
+
+
+@router.get("/{workflow_id}/events")
+def list_workflow_events(workflow_id: str) -> dict:
+    try:
+        events = get_trace_event_repository().list_by_workflow(workflow_id, tenant_id="demo-tenant")
+    except TraceEventConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return {
+        "workflow_id": workflow_id,
+        "events": [event.model_dump(mode="json") for event in events],
     }

@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.repositories.approvals import get_approval_repository
+from app.repositories.events import get_trace_event_repository
 from app.repositories.snapshots import get_workflow_snapshot_repository
 
 
@@ -112,3 +113,19 @@ def test_workflow_resume_returns_409_when_snapshot_is_missing():
 
     assert resumed.status_code == 409
     assert "workflow snapshot not found" in resumed.json()["detail"]
+
+
+def test_workflow_events_endpoint_returns_trace_events():
+    get_approval_repository().clear()
+    get_workflow_snapshot_repository().clear()
+    get_trace_event_repository().clear()
+    client = TestClient(create_app())
+    response = client.post("/workflows", json=WORKFLOW_REQUEST)
+    workflow_id = response.json()["workflow_id"]
+
+    events_response = client.get(f"/workflows/{workflow_id}/events")
+
+    assert events_response.status_code == 200
+    names = [event["name"] for event in events_response.json()["events"]]
+    assert "approval_requested" in names
+    assert "snapshot_saved" in names

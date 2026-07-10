@@ -10,6 +10,7 @@ from app.domain.enums import AgentRole
 class TraceEventType(StrEnum):
     NODE_START = "node_start"
     NODE_END = "node_end"
+    CHECKPOINT = "checkpoint"
     TOOL_DECISION = "tool_decision"
     TOOL_CALL = "tool_call"
     APPROVAL = "approval"
@@ -44,4 +45,3 @@ def create_trace_event(
         metadata=metadata or {},
         created_at=datetime.now(timezone.utc),
     )
-

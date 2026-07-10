@@ -2,8 +2,10 @@ from app.agents.graphs.workflows.product_launch import (
     run_product_launch_preview,
     run_product_launch_publish_resume,
 )
-from app.domain.enums import Marketplace, WorkflowState
+from app.agents.observability.schema import TraceEventType
+from app.domain.enums import AgentRole, Marketplace, WorkflowState
 from app.repositories.approvals import get_approval_repository
+from app.repositories.events import get_trace_event_repository
 from app.repositories.snapshots import get_workflow_snapshot_repository
 
 
@@ -115,6 +117,31 @@ def test_product_launch_preview_saves_awaiting_approval_snapshot():
     assert snapshot.state["completed_steps"][-1] == "await_approval"
 
 
+def test_product_launch_preview_records_trace_events():
+    get_approval_repository().clear()
+    get_workflow_snapshot_repository().clear()
+    events = get_trace_event_repository()
+    events.clear()
+
+    state = run_product_launch_preview(
+        workflow_id="wf_events",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+    workflow_events = events.list_by_workflow(state["workflow_id"], tenant_id="tenant-a")
+    names = [event.name for event in workflow_events]
+
+    assert "product_research" in names
+    assert "risk_review" in names
+    assert "approval_requested" in names
+    assert "snapshot_saved" in names
+    product_research_event = next(event for event in workflow_events if event.name == "product_research")
+    assert product_research_event.agent_role == AgentRole.PRODUCT_RESEARCH
+
+
 def test_product_launch_publish_resume_requires_approved_request():
     repo = get_approval_repository()
     repo.clear()
@@ -180,3 +207,33 @@ def test_product_launch_publish_resume_uses_snapshot_not_approval_metadata():
     assert resumed["current_step"] == WorkflowState.COMPLETED
     assert len(resumed["publish_results"]) == 1
     assert resumed["target_price"] == 29.99
+
+
+def test_product_launch_publish_resume_records_publish_tool_events():
+    repo = get_approval_repository()
+    repo.clear()
+    get_workflow_snapshot_repository().clear()
+    events = get_trace_event_repository()
+    events.clear()
+    state = run_product_launch_preview(
+        workflow_id="wf_publish_events",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON, Marketplace.SHOPIFY],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+    repo.approve(state["approval_request_id"], reviewer_id="ops-lead")
+
+    resumed = run_product_launch_publish_resume(state["approval_request_id"])
+
+    workflow_events = events.list_by_workflow(state["workflow_id"], tenant_id="tenant-a")
+    publish_events = [
+        event
+        for event in workflow_events
+        if event.name == "publish_listing" and event.event_type == TraceEventType.TOOL_CALL
+    ]
+
+    assert resumed["current_step"] == WorkflowState.COMPLETED
+    assert len(publish_events) == len(resumed["publish_results"])
+    assert all(event.event_type == TraceEventType.TOOL_CALL for event in publish_events)
