@@ -36,7 +36,13 @@ def get_node_contracts() -> list[NodeContract]:
             name="supplier_evaluation",
             owner_agent=AgentRole.SUPPLIER,
             side_effect=NodeSideEffect.DETERMINISTIC,
-            output_keys={"tool_calls", "evidence"},
+            output_keys={
+                "tool_calls",
+                "evidence",
+                "supplier_evaluations",
+                "selected_supplier_id",
+                "supplier_risk_level",
+            },
         ),
         NodeContract(
             name="listing_draft",
@@ -57,4 +63,3 @@ def get_node_contracts() -> list[NodeContract]:
             output_keys={"tool_calls"},
         ),
     ]
-

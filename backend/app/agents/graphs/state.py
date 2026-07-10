@@ -21,6 +21,9 @@ class CommerceAgentState(TypedDict):
     risk_level: RiskLevel
     evidence: list[dict[str, Any]]
     profit_estimate: dict[str, Any]
+    supplier_evaluations: list[dict[str, Any]]
+    selected_supplier_id: str | None
+    supplier_risk_level: str
     listing_validations: list[dict[str, Any]]
     publish_results: list[dict[str, Any]]
     completed_steps: list[str]
@@ -54,6 +57,9 @@ def create_initial_state(
         "risk_level": RiskLevel.LOW,
         "evidence": [],
         "profit_estimate": {},
+        "supplier_evaluations": [],
+        "selected_supplier_id": None,
+        "supplier_risk_level": "unknown",
         "listing_validations": [],
         "publish_results": [],
         "completed_steps": [],

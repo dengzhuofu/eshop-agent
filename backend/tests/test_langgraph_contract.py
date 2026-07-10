@@ -28,6 +28,11 @@ def test_node_contracts_separate_read_only_and_approval_gated_nodes():
     assert contracts["product_research"].side_effect == NodeSideEffect.READ_ONLY
     assert contracts["profit_analysis"].side_effect == NodeSideEffect.DETERMINISTIC
     assert contracts["publish_listing"].side_effect == NodeSideEffect.APPROVAL_GATED
+    assert {
+        "supplier_evaluations",
+        "selected_supplier_id",
+        "supplier_risk_level",
+    }.issubset(contracts["supplier_evaluation"].output_keys)
 
 
 def test_approval_route_does_not_execute_side_effects():
@@ -59,4 +64,3 @@ def test_agent_skill_registry_has_domain_scoped_skills():
     assert "cross_border_listing_policy" in skills
     assert "customer_support_rag_policy" in skills
     assert skills["customer_support_rag_policy"].allowed_agents == {AgentRole.CUSTOMER_SUPPORT}
-

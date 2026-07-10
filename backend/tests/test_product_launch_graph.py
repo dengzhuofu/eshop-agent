@@ -41,6 +41,7 @@ def test_product_launch_graph_records_ordered_steps_and_evidence():
     assert state["completed_steps"] == [
         "product_research",
         "profit_analysis",
+        "supplier_evaluation",
         "listing_validation",
         "risk_review",
         "await_approval",
@@ -71,6 +72,43 @@ def test_product_launch_graph_records_profit_and_listing_validations():
         "tiktok_shop",
     }
     assert all(item["valid"] is True for item in state["listing_validations"])
+
+
+def test_product_launch_graph_records_supplier_evaluation():
+    state = run_product_launch_preview(
+        workflow_id="wf_supplier",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+
+    assert state["completed_steps"].index("supplier_evaluation") > state["completed_steps"].index(
+        "profit_analysis"
+    )
+    assert state["completed_steps"].index("supplier_evaluation") < state["completed_steps"].index(
+        "listing_validation"
+    )
+    assert state["selected_supplier_id"] == "SUP-1"
+    assert state["supplier_risk_level"] == "low"
+    assert len(state["supplier_evaluations"]) >= 2
+    assert any(call["tool"] == "score_supplier" for call in state["tool_calls"])
+
+
+def test_product_launch_risk_review_flags_high_supplier_risk():
+    state = run_product_launch_preview(
+        workflow_id="wf_supplier_risk",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="supplier_risk",
+    )
+
+    assert state["supplier_risk_level"] == "high"
+    assert state["selected_supplier_id"] is None
+    assert "supplier_risk" in state["approval_reasons"]
 
 
 def test_product_launch_graph_creates_retrievable_approval_request():
@@ -136,10 +174,13 @@ def test_product_launch_preview_records_trace_events():
 
     assert "product_research" in names
     assert "risk_review" in names
+    assert "supplier_evaluation" in names
     assert "approval_requested" in names
     assert "snapshot_saved" in names
     product_research_event = next(event for event in workflow_events if event.name == "product_research")
     assert product_research_event.agent_role == AgentRole.PRODUCT_RESEARCH
+    supplier_event = next(event for event in workflow_events if event.name == "supplier_evaluation")
+    assert supplier_event.agent_role == AgentRole.SUPPLIER
 
 
 def test_product_launch_publish_resume_requires_approved_request():

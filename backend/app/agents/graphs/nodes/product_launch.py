@@ -6,6 +6,7 @@ from app.domain.schemas import ListingDraft
 from app.repositories.approvals import get_approval_repository
 from app.security.boundary import AgentBoundaryPolicy, ToolAccessContext
 from app.services.profit import ProfitInput, estimate_profit
+from app.services.suppliers import SupplierInput, SupplierScore, score_supplier
 from app.tools.registry import build_default_registry
 
 
@@ -66,6 +67,92 @@ def profit_analysis_node(state: CommerceAgentState) -> dict:
     }
 
 
+def _supplier_candidates(state: CommerceAgentState) -> list[SupplierInput]:
+    if state["risk_preference"] == "supplier_risk":
+        return [
+            SupplierInput(
+                supplier_id="SUP-RISK-1",
+                unit_price=7.5,
+                moq=1200,
+                lead_time_days=45,
+                quality_score=0.68,
+                defect_rate=0.12,
+                response_time_hours=48,
+                has_required_certifications=False,
+            )
+        ]
+
+    return [
+        SupplierInput(
+            supplier_id="SUP-1",
+            unit_price=8.0,
+            moq=300,
+            lead_time_days=14,
+            quality_score=0.92,
+            defect_rate=0.02,
+            response_time_hours=8,
+            has_required_certifications=True,
+        ),
+        SupplierInput(
+            supplier_id="SUP-2",
+            unit_price=7.5,
+            moq=1200,
+            lead_time_days=45,
+            quality_score=0.68,
+            defect_rate=0.12,
+            response_time_hours=48,
+            has_required_certifications=False,
+        ),
+    ]
+
+
+def _select_supplier(scores: list[SupplierScore]) -> SupplierScore | None:
+    recommended = [score for score in scores if score.recommended]
+    candidates = recommended or scores
+    if not candidates:
+        return None
+    return max(candidates, key=lambda score: score.total_score)
+
+
+def supplier_evaluation_node(state: CommerceAgentState) -> dict:
+    scores = [score_supplier(candidate) for candidate in _supplier_candidates(state)]
+    selected = _select_supplier(scores)
+    supplier_risk_level = selected.risk_level if selected is not None and selected.recommended else "high"
+
+    return {
+        "current_agent": AgentRole.SUPPLIER,
+        "current_step": WorkflowState.EVALUATING_SUPPLIERS,
+        "completed_steps": _append_step(state, "supplier_evaluation"),
+        "supplier_evaluations": [score.model_dump() for score in scores],
+        "selected_supplier_id": selected.supplier_id if selected is not None and selected.recommended else None,
+        "supplier_risk_level": supplier_risk_level,
+        "tool_calls": [
+            *state["tool_calls"],
+            *[
+                {
+                    "tool": "score_supplier",
+                    "supplier_id": score.supplier_id,
+                    "risk_level": RiskLevel.LOW.value,
+                    "status": "completed",
+                }
+                for score in scores
+            ],
+        ],
+        "evidence": [
+            *state["evidence"],
+            {
+                "source": "mock_supplier_scorecard",
+                "summary": (
+                    f"Selected supplier {selected.supplier_id}"
+                    if selected is not None and selected.recommended
+                    else "No low-risk supplier selected"
+                ),
+                "confidence": 0.86,
+            },
+        ],
+    }
+
+
 def _draft_for_marketplace(marketplace: Marketplace, state: CommerceAgentState) -> ListingDraft:
     attributes: dict[str, str | int | float | bool] = {"category": "home_storage"}
     if marketplace == Marketplace.SHOPIFY:
@@ -119,14 +206,18 @@ def listing_validation_node(state: CommerceAgentState) -> dict:
 def risk_review_node(state: CommerceAgentState) -> dict:
     has_invalid_listing = any(not item["valid"] for item in state["listing_validations"])
     profit_risk = state["profit_estimate"].get("profit_risk")
-    risk_level = RiskLevel.HIGH if has_invalid_listing or profit_risk == "high" else RiskLevel.MEDIUM
+    supplier_risk = state["supplier_risk_level"] == "high"
+    risk_level = RiskLevel.HIGH if has_invalid_listing or profit_risk == "high" or supplier_risk else RiskLevel.MEDIUM
+    approval_reasons = ["publish_listing"]
+    if supplier_risk:
+        approval_reasons.append("supplier_risk")
     return {
         "current_agent": AgentRole.RISK_REVIEW,
         "current_step": WorkflowState.REVIEWING_RISK,
         "completed_steps": _append_step(state, "risk_review"),
         "risk_level": risk_level,
         "approval_required": True,
-        "approval_reasons": ["publish_listing"],
+        "approval_reasons": approval_reasons,
     }
 
 

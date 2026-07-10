@@ -9,6 +9,7 @@ from app.agents.graphs.nodes.product_launch import (
     product_research_node,
     profit_analysis_node,
     risk_review_node,
+    supplier_evaluation_node,
 )
 from app.agents.graphs.routes.product_launch import route_after_risk_review
 from app.agents.graphs.state import CommerceAgentState, create_initial_state
@@ -20,6 +21,7 @@ from app.repositories.snapshots import get_workflow_snapshot_repository
 STEP_AGENT_ROLES = {
     "product_research": AgentRole.PRODUCT_RESEARCH,
     "profit_analysis": AgentRole.PROFIT_ANALYST,
+    "supplier_evaluation": AgentRole.SUPPLIER,
     "listing_validation": AgentRole.LISTING,
     "risk_review": AgentRole.RISK_REVIEW,
     "await_approval": AgentRole.SUPERVISOR,
@@ -32,6 +34,7 @@ def build_product_launch_graph():
     graph = StateGraph(CommerceAgentState)
     graph.add_node("product_research", product_research_node)
     graph.add_node("profit_analysis", profit_analysis_node)
+    graph.add_node("supplier_evaluation", supplier_evaluation_node)
     graph.add_node("listing_validation", listing_validation_node)
     graph.add_node("risk_review", risk_review_node)
     graph.add_node("await_approval", await_approval_node)
@@ -39,7 +42,8 @@ def build_product_launch_graph():
 
     graph.add_edge(START, "product_research")
     graph.add_edge("product_research", "profit_analysis")
-    graph.add_edge("profit_analysis", "listing_validation")
+    graph.add_edge("profit_analysis", "supplier_evaluation")
+    graph.add_edge("supplier_evaluation", "listing_validation")
     graph.add_edge("listing_validation", "risk_review")
     graph.add_conditional_edges(
         "risk_review",
