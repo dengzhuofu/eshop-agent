@@ -51,6 +51,27 @@ def build_default_registry() -> ToolRegistry:
                 requires_approval=False,
             ),
             ToolDefinition(
+                name="validate_listing",
+                description="Validate a listing draft against marketplace rules.",
+                risk_level=RiskLevel.LOW,
+                required_permission="workflow:read",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="localize_listing",
+                description="Localize listing content for a target locale.",
+                risk_level=RiskLevel.MEDIUM,
+                required_permission="workflow:create",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="score_supplier",
+                description="Run deterministic supplier scoring.",
+                risk_level=RiskLevel.LOW,
+                required_permission="workflow:read",
+                requires_approval=False,
+            ),
+            ToolDefinition(
                 name="publish_listing",
                 description="Publish a listing through a marketplace adapter.",
                 risk_level=RiskLevel.HIGH,
@@ -74,6 +95,56 @@ def build_default_registry() -> ToolRegistry:
                 requires_approval=False,
             ),
             ToolDefinition(
+                name="get_order_details",
+                description="Read order details for support workflows.",
+                risk_level=RiskLevel.LOW,
+                required_permission="workflow:read",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="get_shipping_status",
+                description="Read shipping status for support workflows.",
+                risk_level=RiskLevel.LOW,
+                required_permission="workflow:read",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="get_return_policy",
+                description="Retrieve tenant and marketplace return policy references.",
+                risk_level=RiskLevel.LOW,
+                required_permission="workflow:read",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="draft_support_response",
+                description="Draft a grounded support response without sending it.",
+                risk_level=RiskLevel.MEDIUM,
+                required_permission="support:respond",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="get_listing_performance",
+                description="Read mock listing performance metrics.",
+                risk_level=RiskLevel.LOW,
+                required_permission="workflow:read",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="record_evaluation_result",
+                description="Record evaluation output for a workflow step.",
+                risk_level=RiskLevel.LOW,
+                required_permission="observability:read",
+                requires_approval=False,
+            ),
+            ToolDefinition(
+                name="request_refund_approval",
+                description="Create a refund approval request without issuing money movement.",
+                risk_level=RiskLevel.HIGH,
+                required_permission="approval:review",
+                requires_approval=True,
+                idempotent=True,
+            ),
+            ToolDefinition(
                 name="issue_refund",
                 description="Issue a customer refund.",
                 risk_level=RiskLevel.CRITICAL,
@@ -83,4 +154,3 @@ def build_default_registry() -> ToolRegistry:
             ),
         ]
     )
-

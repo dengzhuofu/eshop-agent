@@ -39,3 +39,14 @@ class ApprovalStatus(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
 
+
+class AgentRole(StrEnum):
+    SUPERVISOR = "supervisor"
+    PRODUCT_RESEARCH = "product_research"
+    PROFIT_ANALYST = "profit_analyst"
+    SUPPLIER = "supplier"
+    LISTING = "listing"
+    LOCALIZATION = "localization"
+    OPS = "ops"
+    CUSTOMER_SUPPORT = "customer_support"
+    RISK_REVIEW = "risk_review"
