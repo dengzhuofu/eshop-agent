@@ -8,12 +8,20 @@ class CommerceAgentState(TypedDict):
     tenant_id: str
     current_agent: AgentRole
     current_step: str
+    product_idea: str
+    target_marketplaces: list[str]
+    target_price: float
+    risk_preference: str
     messages: list[dict[str, Any]]
     tool_calls: list[dict[str, Any]]
     approval_required: bool
     approval_request_id: str | None
+    approval_reasons: list[str]
     risk_level: RiskLevel
     evidence: list[dict[str, Any]]
+    profit_estimate: dict[str, Any]
+    listing_validations: list[dict[str, Any]]
+    completed_steps: list[str]
     errors: list[str]
 
 
@@ -21,18 +29,29 @@ def create_initial_state(
     workflow_id: str,
     tenant_id: str,
     current_agent: AgentRole,
+    product_idea: str = "",
+    target_marketplaces: list[str] | None = None,
+    target_price: float = 0,
+    risk_preference: str = "balanced",
 ) -> CommerceAgentState:
     return {
         "workflow_id": workflow_id,
         "tenant_id": tenant_id,
         "current_agent": current_agent,
         "current_step": "queued",
+        "product_idea": product_idea,
+        "target_marketplaces": target_marketplaces or [],
+        "target_price": target_price,
+        "risk_preference": risk_preference,
         "messages": [],
         "tool_calls": [],
         "approval_required": False,
         "approval_request_id": None,
+        "approval_reasons": [],
         "risk_level": RiskLevel.LOW,
         "evidence": [],
+        "profit_estimate": {},
+        "listing_validations": [],
+        "completed_steps": [],
         "errors": [],
     }
-

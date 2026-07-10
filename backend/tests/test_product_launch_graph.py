@@ -1,0 +1,66 @@
+from app.agents.graphs.workflows.product_launch import run_product_launch_preview
+from app.domain.enums import Marketplace, WorkflowState
+
+
+def test_product_launch_graph_routes_to_awaiting_approval():
+    state = run_product_launch_preview(
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[
+            Marketplace.AMAZON,
+            Marketplace.SHOPIFY,
+            Marketplace.TIKTOK_SHOP,
+        ],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+
+    assert state["current_step"] == WorkflowState.AWAITING_APPROVAL
+    assert state["approval_required"] is True
+    assert state["approval_reasons"] == ["publish_listing"]
+
+
+def test_product_launch_graph_records_ordered_steps_and_evidence():
+    state = run_product_launch_preview(
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+
+    assert state["completed_steps"] == [
+        "product_research",
+        "profit_analysis",
+        "listing_validation",
+        "risk_review",
+        "await_approval",
+    ]
+    assert state["evidence"][0]["source"] == "mock_market_trends"
+    assert "storage" in state["evidence"][0]["summary"].lower()
+
+
+def test_product_launch_graph_records_profit_and_listing_validations():
+    state = run_product_launch_preview(
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[
+            Marketplace.AMAZON,
+            Marketplace.SHOPIFY,
+            Marketplace.TIKTOK_SHOP,
+        ],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+
+    assert state["profit_estimate"]["landed_cost"] == 12.8
+    assert len(state["listing_validations"]) == 3
+    assert {item["marketplace"] for item in state["listing_validations"]} == {
+        "amazon",
+        "shopify",
+        "tiktok_shop",
+    }
+    assert all(item["valid"] is True for item in state["listing_validations"])
