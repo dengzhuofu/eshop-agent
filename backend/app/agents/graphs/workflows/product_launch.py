@@ -13,6 +13,7 @@ from app.agents.graphs.routes.product_launch import route_after_risk_review
 from app.agents.graphs.state import CommerceAgentState, create_initial_state
 from app.domain.enums import AgentRole, Marketplace, WorkflowState
 from app.repositories.approvals import get_approval_repository
+from app.repositories.snapshots import get_workflow_snapshot_repository
 
 
 def build_product_launch_graph():
@@ -66,7 +67,15 @@ def run_product_launch_preview(
         target_price=target_price,
         risk_preference=risk_preference,
     )
-    return build_product_launch_graph().invoke(initial_state)
+    state = build_product_launch_graph().invoke(initial_state)
+    if WorkflowState(state["current_step"]) == WorkflowState.AWAITING_APPROVAL:
+        get_workflow_snapshot_repository().save(
+            workflow_id=state["workflow_id"],
+            tenant_id=state["tenant_id"],
+            checkpoint_name="await_approval",
+            state=state,
+        )
+    return state
 
 
 def run_product_launch_publish_resume(approval_request_id: str | None) -> CommerceAgentState:
@@ -82,16 +91,23 @@ def run_product_launch_publish_resume(approval_request_id: str | None) -> Commer
         initial_state["errors"] = ["approval request not found"]
         return initial_state
 
-    metadata = approval.metadata
-    initial_state = create_initial_state(
-        workflow_id=approval.workflow_id,
+    snapshot = get_workflow_snapshot_repository().get_latest(
+        approval.workflow_id,
         tenant_id=approval.tenant_id,
-        current_agent=AgentRole.SUPERVISOR,
-        product_idea=str(metadata.get("product_idea", "")),
-        target_marketplaces=[str(item) for item in metadata.get("target_marketplaces", [])],
-        target_price=float(metadata.get("target_price", 0)),
-        risk_preference=str(metadata.get("risk_preference", "balanced")),
     )
+    if snapshot is None:
+        initial_state = create_initial_state(
+            workflow_id=approval.workflow_id,
+            tenant_id=approval.tenant_id,
+            current_agent=AgentRole.SUPERVISOR,
+        )
+        initial_state["approval_request_id"] = approval.id
+        initial_state["approval_request"] = approval.model_dump(mode="json")
+        initial_state["current_step"] = WorkflowState.FAILED
+        initial_state["errors"] = ["workflow snapshot not found"]
+        return initial_state
+
+    initial_state = snapshot.state
     initial_state["approval_required"] = True
     initial_state["approval_request_id"] = approval.id
     initial_state["approval_request"] = approval.model_dump(mode="json")

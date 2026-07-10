@@ -9,6 +9,7 @@ from app.agents.graphs.workflows.product_launch import (
 )
 from app.domain.enums import Marketplace, WorkflowState
 from app.repositories.approvals import get_approval_repository
+from app.repositories.snapshots import get_workflow_snapshot_repository
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -45,6 +46,7 @@ def create_workflow(request: WorkflowCreateRequest) -> dict:
         target_price=request.target_price,
         risk_preference=request.risk_preference,
     )
+    snapshot = get_workflow_snapshot_repository().get_latest(workflow_id, tenant_id="demo-tenant")
 
     return {
         "workflow_id": workflow_id,
@@ -57,6 +59,13 @@ def create_workflow(request: WorkflowCreateRequest) -> dict:
         "approval_request_id": state["approval_request_id"],
         "approval_request": state["approval_request"],
         "approval_reasons": state["approval_reasons"],
+        "snapshot": None
+        if snapshot is None
+        else {
+            "id": snapshot.id,
+            "checkpoint_name": snapshot.checkpoint_name,
+            "version": snapshot.version,
+        },
         "completed_steps": state["completed_steps"],
     }
 

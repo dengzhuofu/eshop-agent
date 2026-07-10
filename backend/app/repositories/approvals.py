@@ -80,6 +80,12 @@ class ApprovalRepository:
         with self._lock:
             self._requests.clear()
 
+    def replace(self, request: ApprovalRequest) -> ApprovalRequest:
+        with self._lock:
+            stored = request.model_copy(deep=True)
+            self._requests[request.id] = stored
+            return stored.model_copy(deep=True)
+
     def _transition(
         self,
         approval_id: str,

@@ -4,6 +4,7 @@ from app.agents.graphs.workflows.product_launch import (
 )
 from app.domain.enums import Marketplace, WorkflowState
 from app.repositories.approvals import get_approval_repository
+from app.repositories.snapshots import get_workflow_snapshot_repository
 
 
 def test_product_launch_graph_routes_to_awaiting_approval():
@@ -93,6 +94,27 @@ def test_product_launch_graph_creates_retrievable_approval_request():
     assert state["approval_request"]["status"] == "pending"
 
 
+def test_product_launch_preview_saves_awaiting_approval_snapshot():
+    get_approval_repository().clear()
+    snapshots = get_workflow_snapshot_repository()
+    snapshots.clear()
+
+    state = run_product_launch_preview(
+        workflow_id="wf_snapshot",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+    snapshot = snapshots.get_latest("wf_snapshot", tenant_id="tenant-a")
+
+    assert snapshot is not None
+    assert snapshot.checkpoint_name == "await_approval"
+    assert snapshot.state["approval_request_id"] == state["approval_request_id"]
+    assert snapshot.state["completed_steps"][-1] == "await_approval"
+
+
 def test_product_launch_publish_resume_requires_approved_request():
     repo = get_approval_repository()
     repo.clear()
@@ -133,3 +155,28 @@ def test_product_launch_publish_resume_publishes_all_marketplaces_after_approval
     assert {item["marketplace"] for item in first["publish_results"]} == {"amazon", "shopify"}
     assert first["publish_results"] == second["publish_results"]
     assert all(item["status"] == "published" for item in first["publish_results"])
+
+
+def test_product_launch_publish_resume_uses_snapshot_not_approval_metadata():
+    repo = get_approval_repository()
+    repo.clear()
+    snapshots = get_workflow_snapshot_repository()
+    snapshots.clear()
+    state = run_product_launch_preview(
+        workflow_id="wf_snapshot",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+    approval = repo.approve(state["approval_request_id"], reviewer_id="ops-lead")
+    approval.metadata["target_price"] = 0
+    approval.metadata["target_marketplaces"] = []
+    repo.replace(approval)
+
+    resumed = run_product_launch_publish_resume(state["approval_request_id"])
+
+    assert resumed["current_step"] == WorkflowState.COMPLETED
+    assert len(resumed["publish_results"]) == 1
+    assert resumed["target_price"] == 29.99
