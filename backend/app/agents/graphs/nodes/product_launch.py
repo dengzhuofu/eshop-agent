@@ -1,9 +1,12 @@
 from app.adapters.mock_marketplaces import get_mock_adapter
+from app.agents.profiles import list_agent_profiles
 from app.agents.graphs.state import CommerceAgentState
-from app.domain.enums import AgentRole, Marketplace, RiskLevel, WorkflowState
+from app.domain.enums import AgentRole, ApprovalStatus, Marketplace, RiskLevel, WorkflowState
 from app.domain.schemas import ListingDraft
 from app.repositories.approvals import get_approval_repository
+from app.security.boundary import AgentBoundaryPolicy, ToolAccessContext
 from app.services.profit import ProfitInput, estimate_profit
+from app.tools.registry import build_default_registry
 
 
 def _append_step(state: CommerceAgentState, step: str) -> list[str]:
@@ -142,6 +145,7 @@ def await_approval_node(state: CommerceAgentState) -> dict:
             "tool": "publish_listing",
             "product_idea": state["product_idea"],
             "target_marketplaces": state["target_marketplaces"],
+            "target_price": state["target_price"],
         },
     )
     return {
@@ -150,6 +154,92 @@ def await_approval_node(state: CommerceAgentState) -> dict:
         "completed_steps": _append_step(state, "await_approval"),
         "approval_request_id": approval.id,
         "approval_request": approval.model_dump(mode="json"),
+    }
+
+
+def publish_listing_node(state: CommerceAgentState) -> dict:
+    approval = get_approval_repository().get(state["approval_request_id"])
+    if approval is None:
+        return {
+            "current_agent": AgentRole.SUPERVISOR,
+            "current_step": WorkflowState.FAILED,
+            "completed_steps": _append_step(state, "publish_listing"),
+            "errors": [*state["errors"], "approval request not found"],
+            "publish_results": [],
+        }
+
+    if approval.status != ApprovalStatus.APPROVED:
+        return {
+            "current_agent": AgentRole.SUPERVISOR,
+            "current_step": WorkflowState.FAILED,
+            "completed_steps": _append_step(state, "publish_listing"),
+            "errors": [*state["errors"], "approval is not approved"],
+            "approval_request": approval.model_dump(mode="json"),
+            "publish_results": [],
+        }
+
+    if not state["target_marketplaces"] or state["target_price"] <= 0:
+        return {
+            "current_agent": AgentRole.SUPERVISOR,
+            "current_step": WorkflowState.FAILED,
+            "completed_steps": _append_step(state, "publish_listing"),
+            "errors": [*state["errors"], "approval metadata is incomplete"],
+            "approval_request": approval.model_dump(mode="json"),
+            "publish_results": [],
+        }
+
+    boundary = AgentBoundaryPolicy(
+        profiles=list_agent_profiles(),
+        registry=build_default_registry(),
+    )
+    decision = boundary.evaluate_tool_access(
+        ToolAccessContext(
+            agent_role=AgentRole.SUPERVISOR,
+            tool_name="publish_listing",
+            actor_tenant_id=approval.tenant_id,
+            target_tenant_id=approval.tenant_id,
+            actor_permissions={"listing:publish"},
+            approved=True,
+            payload={"approval_request_id": approval.id},
+        )
+    )
+    if not decision.allowed:
+        return {
+            "current_agent": AgentRole.SUPERVISOR,
+            "current_step": WorkflowState.FAILED,
+            "completed_steps": _append_step(state, "publish_listing"),
+            "errors": [*state["errors"], *decision.reasons],
+            "approval_request": approval.model_dump(mode="json"),
+            "publish_results": [],
+        }
+
+    publish_results = []
+    tool_calls = [*state["tool_calls"]]
+    for marketplace_value in state["target_marketplaces"]:
+        marketplace = Marketplace(marketplace_value)
+        adapter = get_mock_adapter(marketplace)
+        result = adapter.publish_listing(
+            _draft_for_marketplace(marketplace, state),
+            idempotency_key=f"{approval.id}:{marketplace.value}",
+        )
+        publish_results.append(result.model_dump(mode="json"))
+        tool_calls.append(
+            {
+                "tool": "publish_listing",
+                "marketplace": marketplace.value,
+                "risk_level": RiskLevel.HIGH.value,
+                "status": "completed",
+                "approval_request_id": approval.id,
+            }
+        )
+
+    return {
+        "current_agent": AgentRole.SUPERVISOR,
+        "current_step": WorkflowState.COMPLETED,
+        "completed_steps": _append_step(state, "publish_listing"),
+        "approval_request": approval.model_dump(mode="json"),
+        "publish_results": publish_results,
+        "tool_calls": tool_calls,
     }
 
 

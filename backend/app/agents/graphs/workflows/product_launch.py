@@ -4,13 +4,15 @@ from app.agents.graphs.nodes.product_launch import (
     await_approval_node,
     complete_node,
     listing_validation_node,
+    publish_listing_node,
     product_research_node,
     profit_analysis_node,
     risk_review_node,
 )
 from app.agents.graphs.routes.product_launch import route_after_risk_review
 from app.agents.graphs.state import CommerceAgentState, create_initial_state
-from app.domain.enums import AgentRole, Marketplace
+from app.domain.enums import AgentRole, Marketplace, WorkflowState
+from app.repositories.approvals import get_approval_repository
 
 
 def build_product_launch_graph():
@@ -39,6 +41,14 @@ def build_product_launch_graph():
     return graph.compile()
 
 
+def build_product_launch_publish_graph():
+    graph = StateGraph(CommerceAgentState)
+    graph.add_node("publish_listing", publish_listing_node)
+    graph.add_edge(START, "publish_listing")
+    graph.add_edge("publish_listing", END)
+    return graph.compile()
+
+
 def run_product_launch_preview(
     workflow_id: str,
     tenant_id: str,
@@ -57,3 +67,34 @@ def run_product_launch_preview(
         risk_preference=risk_preference,
     )
     return build_product_launch_graph().invoke(initial_state)
+
+
+def run_product_launch_publish_resume(approval_request_id: str | None) -> CommerceAgentState:
+    approval = get_approval_repository().get(approval_request_id)
+    if approval is None:
+        initial_state = create_initial_state(
+            workflow_id="unknown",
+            tenant_id="unknown",
+            current_agent=AgentRole.SUPERVISOR,
+        )
+        initial_state["approval_request_id"] = approval_request_id
+        initial_state["current_step"] = WorkflowState.FAILED
+        initial_state["errors"] = ["approval request not found"]
+        return initial_state
+
+    metadata = approval.metadata
+    initial_state = create_initial_state(
+        workflow_id=approval.workflow_id,
+        tenant_id=approval.tenant_id,
+        current_agent=AgentRole.SUPERVISOR,
+        product_idea=str(metadata.get("product_idea", "")),
+        target_marketplaces=[str(item) for item in metadata.get("target_marketplaces", [])],
+        target_price=float(metadata.get("target_price", 0)),
+        risk_preference=str(metadata.get("risk_preference", "balanced")),
+    )
+    initial_state["approval_required"] = True
+    initial_state["approval_request_id"] = approval.id
+    initial_state["approval_request"] = approval.model_dump(mode="json")
+    initial_state["approval_reasons"] = approval.reason_codes
+    initial_state["risk_level"] = approval.risk_level
+    return build_product_launch_publish_graph().invoke(initial_state)

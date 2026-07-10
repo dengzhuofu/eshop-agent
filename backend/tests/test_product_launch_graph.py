@@ -1,4 +1,7 @@
-from app.agents.graphs.workflows.product_launch import run_product_launch_preview
+from app.agents.graphs.workflows.product_launch import (
+    run_product_launch_preview,
+    run_product_launch_publish_resume,
+)
 from app.domain.enums import Marketplace, WorkflowState
 from app.repositories.approvals import get_approval_repository
 
@@ -88,3 +91,45 @@ def test_product_launch_graph_creates_retrievable_approval_request():
     assert request.tenant_id == "tenant-a"
     assert request.reason_codes == ["publish_listing"]
     assert state["approval_request"]["status"] == "pending"
+
+
+def test_product_launch_publish_resume_requires_approved_request():
+    repo = get_approval_repository()
+    repo.clear()
+    state = run_product_launch_preview(
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+
+    resumed = run_product_launch_publish_resume(state["approval_request_id"])
+
+    assert resumed["current_step"] == WorkflowState.FAILED
+    assert "approval is not approved" in resumed["errors"]
+    assert resumed["publish_results"] == []
+
+
+def test_product_launch_publish_resume_publishes_all_marketplaces_after_approval():
+    repo = get_approval_repository()
+    repo.clear()
+    state = run_product_launch_preview(
+        workflow_id="wf_test",
+        tenant_id="tenant-a",
+        product_idea="foldable under-bed storage organizer",
+        target_marketplaces=[Marketplace.AMAZON, Marketplace.SHOPIFY],
+        target_price=29.99,
+        risk_preference="balanced",
+    )
+    repo.approve(state["approval_request_id"], reviewer_id="ops-lead")
+
+    first = run_product_launch_publish_resume(state["approval_request_id"])
+    second = run_product_launch_publish_resume(state["approval_request_id"])
+
+    assert first["current_step"] == WorkflowState.COMPLETED
+    assert len(first["publish_results"]) == 2
+    assert {item["marketplace"] for item in first["publish_results"]} == {"amazon", "shopify"}
+    assert first["publish_results"] == second["publish_results"]
+    assert all(item["status"] == "published" for item in first["publish_results"])

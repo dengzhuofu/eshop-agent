@@ -22,6 +22,7 @@ class CommerceAgentState(TypedDict):
     evidence: list[dict[str, Any]]
     profit_estimate: dict[str, Any]
     listing_validations: list[dict[str, Any]]
+    publish_results: list[dict[str, Any]]
     completed_steps: list[str]
     errors: list[str]
 
@@ -54,6 +55,7 @@ def create_initial_state(
         "evidence": [],
         "profit_estimate": {},
         "listing_validations": [],
+        "publish_results": [],
         "completed_steps": [],
         "errors": [],
     }

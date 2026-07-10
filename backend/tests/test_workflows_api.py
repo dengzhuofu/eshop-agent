@@ -1,6 +1,15 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.repositories.approvals import get_approval_repository
+
+
+WORKFLOW_REQUEST = {
+    "product_idea": "foldable under-bed storage organizer",
+    "target_marketplaces": ["amazon", "shopify", "tiktok_shop"],
+    "target_price": 29.99,
+    "risk_preference": "balanced",
+}
 
 
 def test_marketplace_rules_endpoint_returns_amazon_constraints():
@@ -20,12 +29,7 @@ def test_create_workflow_returns_deterministic_preview():
 
     response = client.post(
         "/workflows",
-        json={
-            "product_idea": "foldable under-bed storage organizer",
-            "target_marketplaces": ["amazon", "shopify", "tiktok_shop"],
-            "target_price": 29.99,
-            "risk_preference": "balanced",
-        },
+        json=WORKFLOW_REQUEST,
     )
 
     assert response.status_code == 200
@@ -44,3 +48,33 @@ def test_create_workflow_returns_deterministic_preview():
         "tiktok_shop",
     }
     assert "publish_listing" in data["approval_reasons"]
+
+
+def test_workflow_resume_publishes_after_approval():
+    get_approval_repository().clear()
+    client = TestClient(create_app())
+    response = client.post("/workflows", json=WORKFLOW_REQUEST)
+    approval_id = response.json()["approval_request_id"]
+    workflow_id = response.json()["workflow_id"]
+    client.post(f"/approvals/{approval_id}/approve", json={"reviewer_id": "ops-lead"})
+
+    resumed = client.post(f"/workflows/{workflow_id}/resume", json={"approval_request_id": approval_id})
+
+    assert resumed.status_code == 200
+    data = resumed.json()
+    assert data["state"] == "completed"
+    assert data["approval_request_id"] == approval_id
+    assert len(data["publish_results"]) == 3
+    assert all(item["status"] == "published" for item in data["publish_results"])
+
+
+def test_workflow_resume_returns_409_when_approval_not_approved():
+    get_approval_repository().clear()
+    client = TestClient(create_app())
+    response = client.post("/workflows", json=WORKFLOW_REQUEST)
+    approval_id = response.json()["approval_request_id"]
+    workflow_id = response.json()["workflow_id"]
+
+    resumed = client.post(f"/workflows/{workflow_id}/resume", json={"approval_request_id": approval_id})
+
+    assert resumed.status_code == 409
