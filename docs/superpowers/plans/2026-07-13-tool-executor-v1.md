@@ -182,13 +182,13 @@ Expected: FAIL because schemas/fields are absent.
 
 **Files:** Create progress log.
 
-- [ ] Run focused regression:
+- [x] Run focused regression:
 
 ```powershell
 & 'C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pytest tests/test_tool_executor.py tests/test_tool_registry.py tests/test_agent_boundaries.py tests/test_security_isolation.py tests/test_trace_events.py -v
 ```
 
-- [ ] Run full `pytest -v` and repository-root `git diff --check`.
-- [ ] Request independent review against shared design, ADR 0002 and branch diff; resolve all Critical/Important issues.
-- [ ] Write Chinese log with owned files, frozen interfaces, handler scope, error matrix, TDD evidence, real counts, review outcome and explicit note that Product Launch was not migrated.
-- [ ] Commit and push: `docs: 记录第十七节点工具执行器进展`; `git push -u origin codex/node-17-tool-executor`.
+- [x] Run full `pytest -v` and repository-root `git diff --check`.
+- [x] Request independent review against shared design, ADR 0002 and branch diff; resolve all Critical/Important issues.
+- [x] Write Chinese log with owned files, frozen interfaces, handler scope, error matrix, TDD evidence, real counts, review outcome and explicit note that Product Launch was not migrated.
+- [x] Commit and push: `docs: 记录第十七节点工具执行器进展`; `git push -u origin codex/node-17-tool-executor`.
