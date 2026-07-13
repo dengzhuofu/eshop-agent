@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -6,6 +9,13 @@ from app.agents.evaluation.results import (
     EvaluationResult,
     ProductLaunchEvaluationSummary,
     canonical_summary_hash,
+)
+from app.agents.evaluation.runner import (
+    DEFAULT_EVAL_ROOT,
+    EvaluationFixtureError,
+    discover_product_launch_fixture_pairs,
+    load_product_launch_expectation,
+    load_product_launch_scenario,
 )
 
 
@@ -87,3 +97,180 @@ def test_evaluation_summary_hash_is_canonical_and_deterministic():
     assert first_hash == canonical_summary_hash(summary)
     assert first_hash == canonical_summary_hash(reordered)
     assert first_hash != canonical_summary_hash(changed)
+
+
+def _scenario_payload(
+    *,
+    scenario_id: str = "fixture-a",
+    scenario_version: int = 1,
+    marketplaces: list[str] | None = None,
+    target_price: float = 29.99,
+) -> dict:
+    return {
+        "schema_version": "product-launch-scenario/v1",
+        "scenario_id": scenario_id,
+        "scenario_version": scenario_version,
+        "tenant_id": "tenant_eval",
+        "workflow_id": f"wf_{scenario_id}",
+        "action": "preview",
+        "input": {
+            "product_idea": "foldable under-bed storage organizer",
+            "marketplaces": marketplaces if marketplaces is not None else ["amazon"],
+            "target_locale": "en-US",
+            "target_price": target_price,
+            "risk_preference": "balanced",
+        },
+    }
+
+
+def _expectation_payload(
+    *,
+    scenario_id: str = "fixture-a",
+    scenario_version: int = 1,
+) -> dict:
+    summary = _evaluation_summary().model_dump(mode="json")
+    return {
+        "schema_version": "product-launch-expectation/v1",
+        "scenario_id": scenario_id,
+        "scenario_version": scenario_version,
+        "summary_hash": canonical_summary_hash(_evaluation_summary()),
+        "summary": summary,
+    }
+
+
+def _write_fixture_pair(
+    root: Path,
+    stem: str,
+    *,
+    scenario_id: str = "fixture-a",
+    scenario_version: int = 1,
+) -> tuple[Path, Path]:
+    scenario_dir = root / "scenarios"
+    expected_dir = root / "expected"
+    scenario_dir.mkdir(parents=True, exist_ok=True)
+    expected_dir.mkdir(parents=True, exist_ok=True)
+    scenario_path = scenario_dir / f"{stem}.json"
+    expected_path = expected_dir / f"{stem}.json"
+    scenario_path.write_text(
+        json.dumps(
+            _scenario_payload(
+                scenario_id=scenario_id,
+                scenario_version=scenario_version,
+            )
+        ),
+        encoding="utf-8",
+    )
+    expected_path.write_text(
+        json.dumps(
+            _expectation_payload(
+                scenario_id=scenario_id,
+                scenario_version=scenario_version,
+            )
+        ),
+        encoding="utf-8",
+    )
+    return scenario_path, expected_path
+
+
+def test_discover_product_launch_fixture_pairs_returns_exactly_seven_sorted_pairs():
+    pairs = discover_product_launch_fixture_pairs(DEFAULT_EVAL_ROOT)
+
+    assert [scenario.stem for scenario, _ in pairs] == [
+        "v1-adapter-validation-failure",
+        "v1-high-risk-supplier",
+        "v1-localization-claim",
+        "v1-low-profit",
+        "v1-missing-approval",
+        "v1-tampered-version-hash",
+        "v1-three-platform-approved-publish",
+    ]
+    assert all(scenario.stem == expected.stem for scenario, expected in pairs)
+
+
+def test_fixture_loader_rejects_malformed_json_and_unknown_fields(tmp_path: Path):
+    malformed_path = tmp_path / "malformed.json"
+    malformed_path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="malformed JSON"):
+        load_product_launch_scenario(malformed_path)
+
+    unknown_field_path = tmp_path / "unknown.json"
+    payload = _expectation_payload()
+    payload["unexpected"] = True
+    unknown_field_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="unexpected"):
+        load_product_launch_expectation(unknown_field_path)
+
+
+@pytest.mark.parametrize(
+    ("marketplaces", "target_price"),
+    [
+        ([], 29.99),
+        (["amazon", "amazon"], 29.99),
+        (["amazon"], 0),
+        (["amazon"], -1),
+    ],
+)
+def test_scenario_loader_rejects_invalid_marketplaces_or_price(
+    tmp_path: Path,
+    marketplaces: list[str],
+    target_price: float,
+):
+    path = tmp_path / "invalid-scenario.json"
+    path.write_text(
+        json.dumps(
+            _scenario_payload(
+                marketplaces=marketplaces,
+                target_price=target_price,
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(EvaluationFixtureError):
+        load_product_launch_scenario(path)
+
+
+@pytest.mark.parametrize("orphan_side", ["scenario", "expected"])
+def test_discover_product_launch_fixtures_rejects_orphan_files(
+    tmp_path: Path,
+    orphan_side: str,
+):
+    scenario_path, expected_path = _write_fixture_pair(tmp_path, "v1-fixture-a")
+    (expected_path if orphan_side == "scenario" else scenario_path).unlink()
+
+    with pytest.raises(EvaluationFixtureError, match="orphan"):
+        discover_product_launch_fixture_pairs(tmp_path)
+
+
+def test_discover_product_launch_fixtures_rejects_duplicate_identity(tmp_path: Path):
+    _write_fixture_pair(tmp_path, "v1-fixture-a")
+    _write_fixture_pair(tmp_path, "v1-fixture-b")
+
+    with pytest.raises(EvaluationFixtureError, match="duplicate scenario identity"):
+        discover_product_launch_fixture_pairs(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("expected_id", "expected_version"),
+    [("fixture-b", 1), ("fixture-a", 2)],
+)
+def test_discover_product_launch_fixtures_rejects_mismatched_identity(
+    tmp_path: Path,
+    expected_id: str,
+    expected_version: int,
+):
+    _, expected_path = _write_fixture_pair(tmp_path, "v1-fixture-a")
+    expected_path.write_text(
+        json.dumps(
+            _expectation_payload(
+                scenario_id=expected_id,
+                scenario_version=expected_version,
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(EvaluationFixtureError, match="identity mismatch"):
+        discover_product_launch_fixture_pairs(tmp_path)

@@ -1,0 +1,31 @@
+{
+  "schema_version": "product-launch-expectation/v1",
+  "scenario_id": "adapter-validation-failure",
+  "scenario_version": 1,
+  "summary_hash": "3941ea3ed1ff2e355270787b67e5a8c4f05e86c27472569475e655f898d49be8",
+  "summary": {
+    "tenant_id": "tenant_golden",
+    "workflow_id": "wf_golden_adapter_failure",
+    "final_state": "failed",
+    "risk_level": "high",
+    "profit_risk_level": "medium",
+    "supplier_risk_level": "low",
+    "selected_supplier_id": "SUP-1",
+    "localization_risk_count": 1,
+    "approval_request_id": "appr_wf_golden_adapter_failure",
+    "approval_status": "approved",
+    "approval_reasons": ["publish_listing", "localization_risk"],
+    "snapshot_id": "snap_wf_golden_adapter_failure_1",
+    "snapshot_version": 1,
+    "validation": [
+      {"marketplace": "amazon", "listing_version_id": "lv_wf_golden_adapter_failure_amazon_2_485a9dae03", "valid": false, "issue_codes": ["claims"]}
+    ],
+    "selected_listing_versions": [
+      {"marketplace": "amazon", "version_id": "lv_wf_golden_adapter_failure_amazon_2_485a9dae03", "content_hash": "485a9dae039253cfc20b04a2d33e1a29fe8ac4550594eeb6e396d67ff5989b61", "stage": "publish_failed"}
+    ],
+    "publish": [],
+    "errors": ["Cannot publish invalid listing: claims"],
+    "trace_counts": {"node_end": 7, "tool_call": 5, "approval": 1, "checkpoint": 1, "error": 1},
+    "publish_trace_statuses": ["failed"]
+  }
+}

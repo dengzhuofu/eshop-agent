@@ -1,0 +1,15 @@
+{
+  "schema_version": "product-launch-scenario/v1",
+  "scenario_id": "three-platform-approved-publish",
+  "scenario_version": 1,
+  "tenant_id": "tenant_golden",
+  "workflow_id": "wf_golden_three_platform",
+  "action": "approve_and_resume",
+  "input": {
+    "product_idea": "foldable under-bed storage organizer",
+    "marketplaces": ["amazon", "shopify", "tiktok_shop"],
+    "target_locale": "en-US",
+    "target_price": 29.99,
+    "risk_preference": "balanced"
+  }
+}

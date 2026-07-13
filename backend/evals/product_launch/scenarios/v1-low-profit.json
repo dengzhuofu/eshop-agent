@@ -1,0 +1,15 @@
+{
+  "schema_version": "product-launch-scenario/v1",
+  "scenario_id": "low-profit",
+  "scenario_version": 1,
+  "tenant_id": "tenant_golden",
+  "workflow_id": "wf_golden_low_profit",
+  "action": "preview",
+  "input": {
+    "product_idea": "foldable under-bed storage organizer",
+    "marketplaces": ["amazon"],
+    "target_locale": "en-US",
+    "target_price": 17.99,
+    "risk_preference": "balanced"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "product-launch-expectation/v1",
+  "scenario_id": "localization-claim",
+  "scenario_version": 1,
+  "summary_hash": "c709c3c06a31d3707e5d043bbc6d070e2d78600d6c043350d11460e718160ad8",
+  "summary": {
+    "tenant_id": "tenant_golden",
+    "workflow_id": "wf_golden_localization_claim",
+    "final_state": "awaiting_approval",
+    "risk_level": "high",
+    "profit_risk_level": "medium",
+    "supplier_risk_level": "low",
+    "selected_supplier_id": "SUP-1",
+    "localization_risk_count": 1,
+    "approval_request_id": "appr_wf_golden_localization_claim",
+    "approval_status": "pending",
+    "approval_reasons": ["publish_listing", "localization_risk"],
+    "snapshot_id": "snap_wf_golden_localization_claim_1",
+    "snapshot_version": 1,
+    "validation": [
+      {"marketplace": "shopify", "listing_version_id": "lv_wf_golden_localization_claim_shopify_2_8eae7ce985", "valid": true, "issue_codes": []}
+    ],
+    "selected_listing_versions": [
+      {"marketplace": "shopify", "version_id": "lv_wf_golden_localization_claim_shopify_2_8eae7ce985", "content_hash": "8eae7ce985e4d7429ba285364fe4953ad7ea261338dad475a7840ab59100c471", "stage": "validated"}
+    ],
+    "publish": [],
+    "errors": [],
+    "trace_counts": {"node_end": 7, "tool_call": 4, "approval": 1, "checkpoint": 1, "error": 0},
+    "publish_trace_statuses": []
+  }
+}

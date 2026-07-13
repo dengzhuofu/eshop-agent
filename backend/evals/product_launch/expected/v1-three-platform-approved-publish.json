@@ -1,0 +1,39 @@
+{
+  "schema_version": "product-launch-expectation/v1",
+  "scenario_id": "three-platform-approved-publish",
+  "scenario_version": 1,
+  "summary_hash": "7161934ac527ad4d1bfaab7d548c5d04e0d559af5fff1a85e19dd806e5c544a5",
+  "summary": {
+    "tenant_id": "tenant_golden",
+    "workflow_id": "wf_golden_three_platform",
+    "final_state": "completed",
+    "risk_level": "medium",
+    "profit_risk_level": "medium",
+    "supplier_risk_level": "low",
+    "selected_supplier_id": "SUP-1",
+    "localization_risk_count": 0,
+    "approval_request_id": "appr_wf_golden_three_platform",
+    "approval_status": "approved",
+    "approval_reasons": ["publish_listing"],
+    "snapshot_id": "snap_wf_golden_three_platform_1",
+    "snapshot_version": 1,
+    "validation": [
+      {"marketplace": "amazon", "listing_version_id": "lv_wf_golden_three_platform_amazon_2_45c27f0f8d", "valid": true, "issue_codes": []},
+      {"marketplace": "shopify", "listing_version_id": "lv_wf_golden_three_platform_shopify_2_e5c5017d63", "valid": true, "issue_codes": []},
+      {"marketplace": "tiktok_shop", "listing_version_id": "lv_wf_golden_three_platform_tiktok_shop_2_f07756f674", "valid": true, "issue_codes": []}
+    ],
+    "selected_listing_versions": [
+      {"marketplace": "amazon", "version_id": "lv_wf_golden_three_platform_amazon_2_45c27f0f8d", "content_hash": "45c27f0f8da5c78a4ec91a08ed2277b71979a1b92acdf979ba162b737b358b44", "stage": "published"},
+      {"marketplace": "shopify", "version_id": "lv_wf_golden_three_platform_shopify_2_e5c5017d63", "content_hash": "e5c5017d639fcccad68cdd715d37e4045c22f02037c6600c836934fe2f061293", "stage": "published"},
+      {"marketplace": "tiktok_shop", "version_id": "lv_wf_golden_three_platform_tiktok_shop_2_f07756f674", "content_hash": "f07756f6749b0178eed6d3f317b86b054c7da8778984430d0b5ded26c35a8cff", "stage": "published"}
+    ],
+    "publish": [
+      {"marketplace": "amazon", "listing_version_id": "lv_wf_golden_three_platform_amazon_2_45c27f0f8d", "status": "published", "external_listing_id": "AMAZON-2fd3bc8059", "error_type": null},
+      {"marketplace": "shopify", "listing_version_id": "lv_wf_golden_three_platform_shopify_2_e5c5017d63", "status": "published", "external_listing_id": "SHOPIFY-eb5e767d9e", "error_type": null},
+      {"marketplace": "tiktok_shop", "listing_version_id": "lv_wf_golden_three_platform_tiktok_shop_2_f07756f674", "status": "published", "external_listing_id": "TIKTOK_SHOP-7cfa428ece", "error_type": null}
+    ],
+    "errors": [],
+    "trace_counts": {"node_end": 8, "tool_call": 12, "approval": 1, "checkpoint": 1, "error": 0},
+    "publish_trace_statuses": ["published", "published", "published"]
+  }
+}

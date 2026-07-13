@@ -1,0 +1,15 @@
+{
+  "schema_version": "product-launch-scenario/v1",
+  "scenario_id": "adapter-validation-failure",
+  "scenario_version": 1,
+  "tenant_id": "tenant_golden",
+  "workflow_id": "wf_golden_adapter_failure",
+  "action": "approve_and_resume",
+  "input": {
+    "product_idea": "foldable under-bed storage organizer",
+    "marketplaces": ["amazon"],
+    "target_locale": "en-GB",
+    "target_price": 29.99,
+    "risk_preference": "localization_risk"
+  }
+}

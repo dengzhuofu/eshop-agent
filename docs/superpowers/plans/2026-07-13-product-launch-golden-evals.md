@@ -123,10 +123,10 @@ Re-run the focused command; expected PASS. Commit: `feat: 增加 Product Launch 
 
 **Files:** Create `backend/evals/product_launch/scenarios/*.json`; create `backend/evals/product_launch/expected/*.json`; modify `backend/app/agents/evaluation/runner.py`; modify test.
 
-- [ ] **Step 1: Write RED tests** for exactly seven sorted pairs; malformed JSON; unknown fields; empty/duplicate marketplaces; non-positive price; orphan scenario/expected; duplicate `(scenario_id, version)`; mismatched IDs/versions.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_product_launch_golden.py -k "fixture or loader or discover" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN** with strict `ProductLaunchScenario`, `ProductLaunchExpectation`, `EvaluationFixtureError`, loaders and pair discovery.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加版本化 Product Launch 黄金场景夹具`.
+- [x] **Step 1: Write RED tests** for exactly seven sorted pairs; malformed JSON; unknown fields; empty/duplicate marketplaces; non-positive price; orphan scenario/expected; duplicate `(scenario_id, version)`; mismatched IDs/versions.
+- [x] **Step 2: Verify RED** with `pytest tests/test_product_launch_golden.py -k "fixture or loader or discover" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN** with strict `ProductLaunchScenario`, `ProductLaunchExpectation`, `EvaluationFixtureError`, loaders and pair discovery.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加版本化 Product Launch 黄金场景夹具`.
 
 ### Task 3: Isolated Replay Runner
 

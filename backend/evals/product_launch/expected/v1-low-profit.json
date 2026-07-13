@@ -1,0 +1,31 @@
+{
+  "schema_version": "product-launch-expectation/v1",
+  "scenario_id": "low-profit",
+  "scenario_version": 1,
+  "summary_hash": "2162ffdd4bc41fb04a1c8b58188a6e3806907c1e5e18a4a218d9f51d4cf669c3",
+  "summary": {
+    "tenant_id": "tenant_golden",
+    "workflow_id": "wf_golden_low_profit",
+    "final_state": "awaiting_approval",
+    "risk_level": "high",
+    "profit_risk_level": "high",
+    "supplier_risk_level": "low",
+    "selected_supplier_id": "SUP-1",
+    "localization_risk_count": 0,
+    "approval_request_id": "appr_wf_golden_low_profit",
+    "approval_status": "pending",
+    "approval_reasons": ["publish_listing"],
+    "snapshot_id": "snap_wf_golden_low_profit_1",
+    "snapshot_version": 1,
+    "validation": [
+      {"marketplace": "amazon", "listing_version_id": "lv_wf_golden_low_profit_amazon_2_623cf8e944", "valid": true, "issue_codes": []}
+    ],
+    "selected_listing_versions": [
+      {"marketplace": "amazon", "version_id": "lv_wf_golden_low_profit_amazon_2_623cf8e944", "content_hash": "623cf8e9440f02aa1be0b165cf314ca4c5ed0b1197075da22603b01b3b7ce7f2", "stage": "validated"}
+    ],
+    "publish": [],
+    "errors": [],
+    "trace_counts": {"node_end": 7, "tool_call": 4, "approval": 1, "checkpoint": 1, "error": 0},
+    "publish_trace_statuses": []
+  }
+}

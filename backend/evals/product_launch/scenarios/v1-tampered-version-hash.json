@@ -1,0 +1,15 @@
+{
+  "schema_version": "product-launch-scenario/v1",
+  "scenario_id": "tampered-version-hash",
+  "scenario_version": 1,
+  "tenant_id": "tenant_golden",
+  "workflow_id": "wf_golden_tampered_hash",
+  "action": "tamper_approval_hash_then_resume",
+  "input": {
+    "product_idea": "foldable under-bed storage organizer",
+    "marketplaces": ["amazon"],
+    "target_locale": "en-US",
+    "target_price": 29.99,
+    "risk_preference": "balanced"
+  }
+}
