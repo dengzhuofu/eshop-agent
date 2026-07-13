@@ -1,12 +1,17 @@
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from app.adapters.operations import SeededOperationsReadAdapter
 from app.domain.enums import Marketplace, RiskLevel
 from app.domain.operations import (
     InventoryEvent,
     MetricEvent,
+    OperationsReadError,
+    OperationsReadQuery,
     OperationsRecord,
     OpsActionProposal,
     OpsFailure,
@@ -18,6 +23,8 @@ from app.domain.operations import (
 LISTING_HASH = "a" * 64
 OBSERVED_AT = datetime(2026, 7, 13, 10, 0, tzinfo=UTC)
 RECEIVED_AT = datetime(2026, 7, 13, 10, 5, tzinfo=UTC)
+AS_OF = datetime(2026, 7, 13, 12, 0, tzinfo=UTC)
+SEED_DIRECTORY = Path(__file__).parents[1] / "app" / "mock_data" / "operations"
 
 
 def _order_event(**overrides) -> OrderEvent:
@@ -148,3 +155,63 @@ def test_action_proposal_is_non_executable():
 
     with pytest.raises(ValidationError):
         OpsActionProposal.model_validate({**payload, "status": "approved"})
+
+
+def test_seeded_port_reads_all_record_types_with_tenant_scope_and_filters():
+    port = SeededOperationsReadAdapter.from_directory(SEED_DIRECTORY)
+    tenant_query = OperationsReadQuery(tenant_id="tenant-a", as_of=AS_OF)
+
+    orders = port.read_orders(tenant_query)
+    inventory = port.read_inventory(tenant_query)
+    shipments = port.read_shipments(tenant_query)
+    metrics = port.read_metrics(tenant_query)
+
+    assert orders and all(type(item) is OrderEvent for item in orders)
+    assert inventory and all(type(item) is InventoryEvent for item in inventory)
+    assert shipments and all(type(item) is ShipmentEvent for item in shipments)
+    assert metrics and all(type(item) is MetricEvent for item in metrics)
+    assert {
+        item.tenant_id for item in [*orders, *inventory, *shipments, *metrics]
+    } == {"tenant-a"}
+
+    filtered_query = OperationsReadQuery(
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+        marketplaces=[Marketplace.TIKTOK_SHOP],
+        listing_version_ids=["lv-a-tiktok-1"],
+    )
+
+    assert port.read_orders(filtered_query) == []
+    assert port.read_inventory(filtered_query) == []
+    assert port.read_shipments(filtered_query) == []
+    assert len(port.read_metrics(filtered_query)) == 4
+    assert all(
+        item.marketplace == Marketplace.TIKTOK_SHOP
+        and item.listing_version_id == "lv-a-tiktok-1"
+        for item in port.read_metrics(filtered_query)
+    )
+
+    tenant_b_query = OperationsReadQuery(tenant_id="tenant-b", as_of=AS_OF)
+    assert all(item.tenant_id == "tenant-b" for item in port.read_orders(tenant_b_query))
+    assert all(item.tenant_id == "tenant-b" for item in port.read_inventory(tenant_b_query))
+    assert all(item.tenant_id == "tenant-b" for item in port.read_shipments(tenant_b_query))
+    assert all(item.tenant_id == "tenant-b" for item in port.read_metrics(tenant_b_query))
+
+
+def test_seed_loader_normalizes_invalid_payload_without_exposure(tmp_path):
+    raw_marker = "DO_NOT_EXPOSE_RAW_SEED"
+    invalid_record = {
+        **_order_event().model_dump(mode="json"),
+        "listing_content_hash": raw_marker,
+    }
+    (tmp_path / "orders.json").write_text(
+        json.dumps([invalid_record]),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(OperationsReadError) as exc_info:
+        SeededOperationsReadAdapter.from_directory(tmp_path)
+
+    assert exc_info.value.code == "seed_validation_failed"
+    assert exc_info.value.tenant_id == "unknown"
+    assert raw_marker not in str(exc_info.value)

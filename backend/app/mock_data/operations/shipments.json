@@ -1,0 +1,36 @@
+[
+  {
+    "record_type": "shipment",
+    "event_id": "shipment-a-shopify-delayed",
+    "tenant_id": "tenant-a",
+    "marketplace": "shopify",
+    "listing_id": "listing-a-shopify",
+    "listing_version_id": "lv-a-shopify-1",
+    "listing_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sku": "SKU-A-SHOP",
+    "observed_at": "2026-07-13T11:00:00Z",
+    "received_at": "2026-07-13T11:05:00Z",
+    "shipment_id": "shipment-a-1",
+    "order_id": "order-a-2",
+    "status": "delayed",
+    "promised_delivery_at": "2026-07-12T06:00:00Z",
+    "estimated_delivery_at": "2026-07-13T08:00:00Z"
+  },
+  {
+    "record_type": "shipment",
+    "event_id": "shipment-b-shopify-healthy",
+    "tenant_id": "tenant-b",
+    "marketplace": "shopify",
+    "listing_id": "listing-b-shopify",
+    "listing_version_id": "lv-b-shopify-1",
+    "listing_content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "sku": "SKU-B-SHOP",
+    "observed_at": "2026-07-13T11:00:00Z",
+    "received_at": "2026-07-13T11:05:00Z",
+    "shipment_id": "shipment-b-1",
+    "order_id": "order-b-2",
+    "status": "in_transit",
+    "promised_delivery_at": "2026-07-14T08:00:00Z",
+    "estimated_delivery_at": "2026-07-14T07:00:00Z"
+  }
+]

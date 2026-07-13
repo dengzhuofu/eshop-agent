@@ -1,0 +1,47 @@
+[
+  {
+    "record_type": "inventory",
+    "event_id": "inventory-a-amazon-old",
+    "tenant_id": "tenant-a",
+    "marketplace": "amazon",
+    "listing_id": "listing-a-amazon",
+    "listing_version_id": "lv-a-amazon-1",
+    "listing_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sku": "SKU-A-AMZ",
+    "observed_at": "2026-07-12T04:00:00Z",
+    "received_at": "2026-07-13T11:30:00Z",
+    "available_quantity": 100,
+    "reserved_quantity": 2,
+    "reorder_point": 10
+  },
+  {
+    "record_type": "inventory",
+    "event_id": "inventory-a-amazon-low",
+    "tenant_id": "tenant-a",
+    "marketplace": "amazon",
+    "listing_id": "listing-a-amazon",
+    "listing_version_id": "lv-a-amazon-1",
+    "listing_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sku": "SKU-A-AMZ",
+    "observed_at": "2026-07-13T11:00:00Z",
+    "received_at": "2026-07-13T11:05:00Z",
+    "available_quantity": 5,
+    "reserved_quantity": 1,
+    "reorder_point": 5
+  },
+  {
+    "record_type": "inventory",
+    "event_id": "inventory-b-amazon-healthy",
+    "tenant_id": "tenant-b",
+    "marketplace": "amazon",
+    "listing_id": "listing-b-amazon",
+    "listing_version_id": "lv-b-amazon-1",
+    "listing_content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "sku": "SKU-B-AMZ",
+    "observed_at": "2026-07-13T11:00:00Z",
+    "received_at": "2026-07-13T11:05:00Z",
+    "available_quantity": 50,
+    "reserved_quantity": 3,
+    "reorder_point": 10
+  }
+]

@@ -118,10 +118,10 @@ Expected: collection FAIL because domain module is absent.
 
 **Files:** Create adapter/seeds; modify test.
 
-- [ ] **Step 1: Write RED tests** for all four record types, tenant/marketplace/version filters and invalid seed normalization.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_operations_agent.py -k "seeded_port or seed_loader" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. Parse JSON with `TypeAdapter(list[OperationsRecord])`; every read method filters tenant before other fields. Invalid files raise `OperationsReadError(code="seed_validation_failed")` without exposing raw payload.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加租户隔离运营种子数据`.
+- [x] **Step 1: Write RED tests** for all four record types, tenant/marketplace/version filters and invalid seed normalization.
+- [x] **Step 2: Verify RED** with `pytest tests/test_operations_agent.py -k "seeded_port or seed_loader" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. Parse JSON with `TypeAdapter(list[OperationsRecord])`; every read method filters tenant before other fields. Invalid files raise `OperationsReadError(code="seed_validation_failed")` without exposing raw payload.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加租户隔离运营种子数据`.
 
 ### Task 3: Normalization, Freshness, Evidence And Proposals
 

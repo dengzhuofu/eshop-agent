@@ -1,0 +1,53 @@
+[
+  {
+    "record_type": "order",
+    "event_id": "order-a-amazon-1",
+    "tenant_id": "tenant-a",
+    "marketplace": "amazon",
+    "listing_id": "listing-a-amazon",
+    "listing_version_id": "lv-a-amazon-1",
+    "listing_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sku": "SKU-A-AMZ",
+    "observed_at": "2026-07-13T10:00:00Z",
+    "received_at": "2026-07-13T10:05:00Z",
+    "order_id": "order-a-1",
+    "status": "paid",
+    "quantity": 2,
+    "gross_revenue": 59.98,
+    "currency": "USD"
+  },
+  {
+    "record_type": "order",
+    "event_id": "order-a-shopify-1",
+    "tenant_id": "tenant-a",
+    "marketplace": "shopify",
+    "listing_id": "listing-a-shopify",
+    "listing_version_id": "lv-a-shopify-1",
+    "listing_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sku": "SKU-A-SHOP",
+    "observed_at": "2026-07-13T09:30:00Z",
+    "received_at": "2026-07-13T09:35:00Z",
+    "order_id": "order-a-2",
+    "status": "fulfilled",
+    "quantity": 1,
+    "gross_revenue": 39.99,
+    "currency": "USD"
+  },
+  {
+    "record_type": "order",
+    "event_id": "order-b-amazon-1",
+    "tenant_id": "tenant-b",
+    "marketplace": "amazon",
+    "listing_id": "listing-b-amazon",
+    "listing_version_id": "lv-b-amazon-1",
+    "listing_content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "sku": "SKU-B-AMZ",
+    "observed_at": "2026-07-13T10:15:00Z",
+    "received_at": "2026-07-13T10:20:00Z",
+    "order_id": "order-b-1",
+    "status": "fulfilled",
+    "quantity": 2,
+    "gross_revenue": 69.98,
+    "currency": "USD"
+  }
+]
