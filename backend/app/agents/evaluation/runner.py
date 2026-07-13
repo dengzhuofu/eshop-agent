@@ -55,6 +55,10 @@ class EvaluationFixtureError(ValueError):
     pass
 
 
+class EvaluationGateError(RuntimeError):
+    pass
+
+
 class StrictFixtureModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -481,3 +485,28 @@ def run_product_launch_suite(
         )
         for scenario_path, expected_path in discover_product_launch_fixture_pairs(root)
     ]
+
+
+def assert_product_launch_regression_gate(
+    results: Sequence[EvaluationResult],
+) -> None:
+    failures: list[str] = []
+    for result in results:
+        reasons = []
+        if result.status != "passed":
+            reasons.append("result_status")
+        if result.score < 1.0:
+            reasons.append("result_score")
+        if result.threshold != 1.0:
+            reasons.append("result_threshold")
+        if any(
+            not metric.passed or metric.score < 1.0 or metric.threshold != 1.0
+            for metric in result.metrics
+        ):
+            reasons.append("metric")
+        if reasons:
+            failures.append(f"{result.scenario_id}:{','.join(reasons)}")
+    if failures:
+        raise EvaluationGateError(
+            f"Product Launch regression gate failed: {'; '.join(failures)}"
+        )

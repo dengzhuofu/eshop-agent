@@ -141,10 +141,10 @@ Re-run the focused command; expected PASS. Commit: `feat: 增加 Product Launch 
 
 **Files:** Modify runner and test.
 
-- [ ] **Step 1: Write RED tests** that seed sentinels in global repositories, execute success and exception scenarios, and prove global state remains unchanged. Add a metric-regression case that must raise `EvaluationGateError`.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_product_launch_golden.py -k "isolation or regression_gate" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. The gate requires every result status passed, every metric passed and score `>= 1.0`; fixture execution always restores getter bindings.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `test: 增加黄金场景隔离与回归门禁`.
+- [x] **Step 1: Write RED tests** that seed sentinels in global repositories, execute success and exception scenarios, and prove global state remains unchanged. Add a metric-regression case that must raise `EvaluationGateError`.
+- [x] **Step 2: Verify RED** with `pytest tests/test_product_launch_golden.py -k "isolation or regression_gate" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. The gate requires every result status passed, every metric passed and score `>= 1.0`; fixture execution always restores getter bindings.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `test: 增加黄金场景隔离与回归门禁`.
 
 ### Task 5: Documentation And Quality Gates
 

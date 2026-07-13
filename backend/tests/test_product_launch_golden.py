@@ -6,6 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 import app.agents.evaluation.runner as evaluation_runner
+from app.agents.graphs.nodes import listings as listing_nodes
+from app.agents.graphs.workflows import product_launch as product_launch_workflow
+from app.agents.observability.schema import TraceEventType, create_trace_event
 from app.agents.evaluation.results import (
     EvaluationMetric,
     EvaluationResult,
@@ -14,13 +17,19 @@ from app.agents.evaluation.results import (
 )
 from app.agents.evaluation.runner import (
     DEFAULT_EVAL_ROOT,
+    EvaluationGateError,
     EvaluationFixtureError,
+    assert_product_launch_regression_gate,
     discover_product_launch_fixture_pairs,
     load_product_launch_expectation,
     load_product_launch_scenario,
     run_product_launch_scenario,
     run_product_launch_suite,
 )
+from app.domain.enums import AgentRole, RiskLevel
+from app.repositories.approvals import get_approval_repository
+from app.repositories.events import get_trace_event_repository
+from app.repositories.snapshots import get_workflow_snapshot_repository
 
 
 def _evaluation_summary(
@@ -360,3 +369,108 @@ def test_product_launch_scenario_normalizes_workflow_exceptions(
     assert result.workflow_id == scenario.workflow_id
     assert result.actual_summary.errors == ["workflow_exception:RuntimeError"]
     assert all("sensitive workflow payload" not in reason for reason in result.failure_reasons)
+
+
+@pytest.mark.parametrize("workflow_exception", [False, True], ids=["success", "exception"])
+def test_product_launch_replay_preserves_global_repository_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+    workflow_exception: bool,
+):
+    approvals = get_approval_repository()
+    snapshots = get_workflow_snapshot_repository()
+    traces = get_trace_event_repository()
+    approvals.clear()
+    snapshots.clear()
+    traces.clear()
+    approval = approvals.upsert_pending(
+        approval_id="appr_global_sentinel",
+        workflow_id="wf_global_sentinel",
+        tenant_id="tenant_global_sentinel",
+        requested_by="isolation-test",
+        reason_codes=["sentinel"],
+        risk_level=RiskLevel.LOW,
+        resource_type="workflow",
+        resource_id="wf_global_sentinel",
+        metadata={"marker": "unchanged"},
+    )
+    snapshot = snapshots.save(
+        workflow_id="wf_global_sentinel",
+        tenant_id="tenant_global_sentinel",
+        checkpoint_name="sentinel",
+        state={"marker": "unchanged"},
+    )
+    trace = traces.record(
+        create_trace_event(
+            workflow_id="wf_global_sentinel",
+            tenant_id="tenant_global_sentinel",
+            agent_role=AgentRole.SUPERVISOR,
+            event_type=TraceEventType.EVALUATION,
+            name="sentinel",
+            metadata={"marker": "unchanged"},
+        )
+    )
+    original_bindings = (
+        product_launch_workflow.get_approval_repository,
+        product_launch_workflow.get_workflow_snapshot_repository,
+        product_launch_workflow.get_trace_event_repository,
+        listing_nodes.get_approval_repository,
+    )
+    scenario_path, expected_path = discover_product_launch_fixture_pairs()[0]
+    scenario = load_product_launch_scenario(scenario_path)
+    expected = load_product_launch_expectation(expected_path)
+
+    if workflow_exception:
+        def raise_workflow_error(*args, **kwargs):
+            raise RuntimeError("forced isolation exception")
+
+        monkeypatch.setattr(
+            evaluation_runner,
+            "run_product_launch_preview",
+            raise_workflow_error,
+        )
+
+    try:
+        run_product_launch_scenario(scenario, expected)
+
+        assert approvals.get(approval.id) == approval
+        assert snapshots.get_latest(
+            snapshot.workflow_id,
+            tenant_id=snapshot.tenant_id,
+        ) == snapshot
+        assert traces.list_by_workflow(
+            trace.workflow_id,
+            tenant_id=trace.tenant_id,
+        ) == [trace]
+        assert (
+            product_launch_workflow.get_approval_repository,
+            product_launch_workflow.get_workflow_snapshot_repository,
+            product_launch_workflow.get_trace_event_repository,
+            listing_nodes.get_approval_repository,
+        ) == original_bindings
+    finally:
+        approvals.clear()
+        snapshots.clear()
+        traces.clear()
+
+
+@pytest.mark.parametrize("regression", ["status", "metric", "score"])
+def test_product_launch_regression_gate_rejects_any_regression(regression: str):
+    results = run_product_launch_suite()
+    assert_product_launch_regression_gate(results)
+    first = results[0]
+
+    if regression == "status":
+        regressed = first.model_copy(update={"status": "failed"}, deep=True)
+    elif regression == "metric":
+        metrics = [
+            first.metrics[0].model_copy(
+                update={"score": 0.0, "passed": False, "reason": "forced regression"}
+            ),
+            *first.metrics[1:],
+        ]
+        regressed = first.model_copy(update={"metrics": metrics}, deep=True)
+    else:
+        regressed = first.model_copy(update={"score": 0.99}, deep=True)
+
+    with pytest.raises(EvaluationGateError, match=first.scenario_id):
+        assert_product_launch_regression_gate([regressed, *results[1:]])
