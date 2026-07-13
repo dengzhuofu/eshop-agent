@@ -13,7 +13,7 @@ from app.security.boundary import AgentBoundaryPolicy
 from app.services.profit import ProfitEstimate, ProfitInput
 from app.services.suppliers import SupplierInput, SupplierScore
 from app.tools.registry import ToolDefinition, ToolRegistry, build_default_registry
-from app.tools.schemas import ToolExecutionContext, ToolRequest
+from app.tools.schemas import RetryPolicy, ToolExecutionContext, ToolRequest
 
 
 def _schemas_module():
@@ -86,17 +86,32 @@ def _context(tool_name: str) -> ToolExecutionContext:
     )
 
 
-def _executor(*, registry=None, handlers=None, approval_verifier=None):
+def _executor(
+    *,
+    registry=None,
+    handlers=None,
+    approval_verifier=None,
+    idempotency_store=None,
+    trace_repository=None,
+    sleeper=asyncio.sleep,
+    clock=None,
+):
     executor_api = _executor_api()
     catalog_api = _catalog_api()
     registry = registry or build_default_registry()
+    kwargs = {
+        "registry": registry,
+        "handlers": handlers or catalog_api.build_default_handler_catalog(),
+        "boundary_policy": AgentBoundaryPolicy(list_agent_profiles(), registry),
+        "approval_verifier": approval_verifier or object(),
+        "idempotency_store": idempotency_store or executor_api.InMemoryIdempotencyStore(),
+        "trace_repository": trace_repository or TraceEventRepository(),
+        "sleeper": sleeper,
+    }
+    if clock is not None:
+        kwargs["clock"] = clock
     return executor_api.ToolExecutor(
-        registry=registry,
-        handlers=handlers or catalog_api.build_default_handler_catalog(),
-        boundary_policy=AgentBoundaryPolicy(list_agent_profiles(), registry),
-        approval_verifier=approval_verifier or object(),
-        idempotency_store=executor_api.InMemoryIdempotencyStore(),
-        trace_repository=TraceEventRepository(),
+        **kwargs,
     )
 
 
@@ -124,6 +139,75 @@ class ApprovalToolOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     accepted: bool
+
+
+class RuntimeToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: str
+    sequence: int = 1
+
+
+class RuntimeToolOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: bool
+
+
+def _runtime_executor(
+    handler,
+    *,
+    retry_policy: RetryPolicy | None = None,
+    timeout_seconds: float = 5,
+    idempotent: bool = False,
+    idempotency_store=None,
+    trace_repository=None,
+    sleeper=asyncio.sleep,
+):
+    catalog_api = _catalog_api()
+    tool = ToolDefinition(
+        name="estimate_profit",
+        description="runtime behavior test tool",
+        risk_level=RiskLevel.LOW,
+        required_permission="workflow:read",
+        requires_approval=False,
+        idempotent=idempotent,
+        input_model=RuntimeToolInput,
+        output_model=RuntimeToolOutput,
+        timeout_seconds=timeout_seconds,
+        retry_policy=retry_policy
+        or RetryPolicy(
+            max_attempts=1,
+            initial_backoff_seconds=0,
+            backoff_multiplier=1,
+            max_backoff_seconds=0,
+            retry_on=frozenset(),
+        ),
+    )
+    registry = ToolRegistry([tool])
+    catalog = catalog_api.ToolHandlerCatalog()
+    catalog.register("estimate_profit", handler)
+    return _executor(
+        registry=registry,
+        handlers=catalog,
+        idempotency_store=idempotency_store,
+        trace_repository=trace_repository,
+        sleeper=sleeper,
+    )
+
+
+def _runtime_request(
+    *,
+    value: str = "payload",
+    sequence: int = 1,
+    idempotency_key: str | None = None,
+) -> ToolRequest:
+    return _request(
+        "estimate_profit",
+        {"value": value, "sequence": sequence},
+        agent_role=AgentRole.PROFIT_ANALYST,
+        idempotency_key=idempotency_key,
+    )
 
 
 def _approval_executor(repository: ApprovalRepository):
@@ -569,3 +653,283 @@ def test_valid_approval_proof_allows_handler_execution():
     assert result.ok is True
     assert result.output == {"accepted": True}
     assert result.attempts == 1
+
+
+def test_timeout_retries_only_to_configured_attempt_limit():
+    calls = 0
+    backoffs: list[float] = []
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.03)
+        return RuntimeToolOutput(accepted=True)
+
+    async def sleeper(delay):
+        backoffs.append(delay)
+
+    policy = RetryPolicy(
+        max_attempts=2,
+        initial_backoff_seconds=0.1,
+        backoff_multiplier=2,
+        max_backoff_seconds=1,
+        retry_on=frozenset({"timeout"}),
+    )
+    result = asyncio.run(
+        _runtime_executor(
+            handler,
+            retry_policy=policy,
+            timeout_seconds=0.005,
+            sleeper=sleeper,
+        ).execute(_runtime_request())
+    )
+
+    assert result.ok is False
+    assert result.code == "timeout"
+    assert result.retryable is True
+    assert result.attempts == 2
+    assert calls == 2
+    assert backoffs == [0.1]
+
+
+def test_retry_two_transient_failures_then_success_with_bounded_backoff():
+    executor_api = _executor_api()
+    calls = 0
+    backoffs: list[float] = []
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise executor_api.TransientToolError("temporary secret detail")
+        return RuntimeToolOutput(accepted=True)
+
+    async def sleeper(delay):
+        backoffs.append(delay)
+
+    policy = RetryPolicy(
+        max_attempts=3,
+        initial_backoff_seconds=0.2,
+        backoff_multiplier=3,
+        max_backoff_seconds=0.5,
+        retry_on=frozenset({"transient_error"}),
+    )
+    result = asyncio.run(
+        _runtime_executor(handler, retry_policy=policy, sleeper=sleeper).execute(
+            _runtime_request()
+        )
+    )
+
+    assert result.ok is True
+    assert result.attempts == 3
+    assert calls == 3
+    assert backoffs == [0.2, 0.5]
+
+
+def test_permanent_handler_error_is_not_retried_and_is_sanitized():
+    calls = 0
+    trace_repository = TraceEventRepository()
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        raise ValueError("api_key=must-not-leak")
+
+    policy = RetryPolicy(
+        max_attempts=3,
+        initial_backoff_seconds=0,
+        backoff_multiplier=2,
+        max_backoff_seconds=1,
+        retry_on=frozenset({"transient_error", "timeout"}),
+    )
+    result = asyncio.run(
+        _runtime_executor(
+            handler,
+            retry_policy=policy,
+            trace_repository=trace_repository,
+        ).execute(_runtime_request())
+    )
+
+    events = trace_repository.list_by_workflow("wf-1", tenant_id="tenant-a")
+    assert result.ok is False
+    assert result.code == "handler_error"
+    assert result.retryable is False
+    assert result.attempts == 1
+    assert calls == 1
+    assert "must-not-leak" not in result.model_dump_json()
+    assert "must-not-leak" not in events[0].model_dump_json()
+
+
+def test_idempotency_key_is_required_before_handler_execution():
+    calls = 0
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        return RuntimeToolOutput(accepted=True)
+
+    result = asyncio.run(
+        _runtime_executor(handler, idempotent=True).execute(_runtime_request())
+    )
+
+    assert result.ok is False
+    assert result.code == "idempotency_key_required"
+    assert result.attempts == 0
+    assert calls == 0
+
+
+def test_same_idempotency_key_and_input_replays_success():
+    executor_api = _executor_api()
+    store = executor_api.InMemoryIdempotencyStore()
+    calls = 0
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        return RuntimeToolOutput(accepted=True)
+
+    executor = _runtime_executor(handler, idempotent=True, idempotency_store=store)
+
+    async def scenario():
+        first = await executor.execute(
+            _runtime_request(idempotency_key="same-key", value="same", sequence=2)
+        )
+        second_request = _request(
+            "estimate_profit",
+            {"sequence": 2, "value": "same"},
+            agent_role=AgentRole.PROFIT_ANALYST,
+            idempotency_key="same-key",
+        )
+        second = await executor.execute(second_request)
+        return first, second
+
+    first, second = asyncio.run(scenario())
+
+    assert first.ok is True and first.replayed is False
+    assert second.ok is True and second.replayed is True
+    assert second.output == first.output
+    assert calls == 1
+
+
+def test_same_idempotency_key_with_different_input_conflicts():
+    executor_api = _executor_api()
+    store = executor_api.InMemoryIdempotencyStore()
+    calls = 0
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        return RuntimeToolOutput(accepted=True)
+
+    executor = _runtime_executor(handler, idempotent=True, idempotency_store=store)
+
+    async def scenario():
+        first = await executor.execute(
+            _runtime_request(idempotency_key="same-key", value="first")
+        )
+        second = await executor.execute(
+            _runtime_request(idempotency_key="same-key", value="different")
+        )
+        return first, second
+
+    first, second = asyncio.run(scenario())
+
+    assert first.ok is True
+    assert second.ok is False
+    assert second.code == "idempotency_conflict"
+    assert second.attempts == 0
+    assert calls == 1
+
+
+def test_concurrent_same_idempotency_key_invokes_handler_once():
+    executor_api = _executor_api()
+    store = executor_api.InMemoryIdempotencyStore()
+    calls = 0
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.01)
+        return RuntimeToolOutput(accepted=True)
+
+    executor = _runtime_executor(handler, idempotent=True, idempotency_store=store)
+    request = _runtime_request(idempotency_key="same-key")
+
+    async def scenario():
+        return await asyncio.gather(executor.execute(request), executor.execute(request))
+
+    results = asyncio.run(scenario())
+
+    assert all(result.ok for result in results)
+    assert sorted(result.replayed for result in results) == [False, True]
+    assert calls == 1
+
+
+def test_idempotency_failure_is_not_cached():
+    executor_api = _executor_api()
+    store = executor_api.InMemoryIdempotencyStore()
+    calls = 0
+
+    async def handler(input_data, context):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ValueError("first call fails")
+        return RuntimeToolOutput(accepted=True)
+
+    executor = _runtime_executor(handler, idempotent=True, idempotency_store=store)
+    request = _runtime_request(idempotency_key="same-key")
+
+    async def scenario():
+        first = await executor.execute(request)
+        second = await executor.execute(request)
+        third = await executor.execute(request)
+        return first, second, third
+
+    first, second, third = asyncio.run(scenario())
+
+    assert first.ok is False
+    assert second.ok is True and second.replayed is False
+    assert third.ok is True and third.replayed is True
+    assert calls == 2
+
+
+def test_attempt_trace_uses_fixed_sanitized_metadata():
+    trace_repository = TraceEventRepository()
+
+    async def handler(input_data, context):
+        return RuntimeToolOutput(accepted=True)
+
+    request = _runtime_request(
+        value="private-payload",
+        idempotency_key="private-idempotency-key",
+    )
+    result = asyncio.run(
+        _runtime_executor(
+            handler,
+            idempotent=True,
+            trace_repository=trace_repository,
+        ).execute(request)
+    )
+
+    events = trace_repository.list_by_workflow("wf-1", tenant_id="tenant-a")
+    assert result.ok is True
+    assert len(events) == 1
+    assert events[0].event_type == "tool_call"
+    assert events[0].name == "estimate_profit"
+    assert set(events[0].metadata) == {
+        "request_id",
+        "trace_id",
+        "tool_version",
+        "input_hash",
+        "attempt",
+        "max_attempts",
+        "status",
+        "duration_ms",
+        "failure_code",
+        "retryable",
+        "idempotency_key_hash",
+    }
+    serialized = events[0].model_dump_json()
+    assert "private-payload" not in serialized
+    assert "private-idempotency-key" not in serialized

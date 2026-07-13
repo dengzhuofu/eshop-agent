@@ -173,10 +173,10 @@ Expected: FAIL because schemas/fields are absent.
 
 **Files:** Modify executor/test.
 
-- [ ] **Step 1: Write RED tests** for timeout, two transient failures then success, permanent error no retry, missing key, same key/input replay, same key/different input conflict, concurrent same key one handler call, attempt trace and sanitized errors.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_tool_executor.py -k "timeout or retry or idempotency or trace or sanitized" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN** with `asyncio.wait_for`, injected sleeper, bounded exponential backoff and per-key lock/cache. Idempotency identity is `(tenant_id, tool_name, tool_version, idempotency_key)` plus canonical input hash.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加工具重试幂等与尝试追踪`.
+- [x] **Step 1: Write RED tests** for timeout, two transient failures then success, permanent error no retry, missing key, same key/input replay, same key/different input conflict, concurrent same key one handler call, attempt trace and sanitized errors.
+- [x] **Step 2: Verify RED** with `pytest tests/test_tool_executor.py -k "timeout or retry or idempotency or trace or sanitized" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN** with `asyncio.wait_for`, injected sleeper, bounded exponential backoff and per-key lock/cache. Idempotency identity is `(tenant_id, tool_name, tool_version, idempotency_key)` plus canonical input hash.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加工具重试幂等与尝试追踪`.
 
 ### Task 5: Progress Log And Quality Gates
 
