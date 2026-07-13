@@ -2,7 +2,7 @@
   "schema_version": "product-launch-expectation/v1",
   "scenario_id": "low-profit",
   "scenario_version": 1,
-  "summary_hash": "2162ffdd4bc41fb04a1c8b58188a6e3806907c1e5e18a4a218d9f51d4cf669c3",
+  "summary_hash": "55a2da37f46f0ceb1f823bec11c69e1b595f2e360eceed8e2e550e02b3730389",
   "summary": {
     "tenant_id": "tenant_golden",
     "workflow_id": "wf_golden_low_profit",
@@ -25,7 +25,7 @@
     ],
     "publish": [],
     "errors": [],
-    "trace_counts": {"node_end": 7, "tool_call": 4, "approval": 1, "checkpoint": 1, "error": 0},
+    "trace_counts": {"node_end": 7, "tool_call": 5, "approval": 1, "checkpoint": 1, "error": 0},
     "publish_trace_statuses": []
   }
 }

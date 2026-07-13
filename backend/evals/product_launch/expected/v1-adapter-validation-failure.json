@@ -2,7 +2,7 @@
   "schema_version": "product-launch-expectation/v1",
   "scenario_id": "adapter-validation-failure",
   "scenario_version": 1,
-  "summary_hash": "3941ea3ed1ff2e355270787b67e5a8c4f05e86c27472569475e655f898d49be8",
+  "summary_hash": "ef1676d1e42e743a05c57cc65a1c644235bcb25b520b43f766d7f5f79bed3175",
   "summary": {
     "tenant_id": "tenant_golden",
     "workflow_id": "wf_golden_adapter_failure",
@@ -25,7 +25,7 @@
     ],
     "publish": [],
     "errors": ["Cannot publish invalid listing: claims"],
-    "trace_counts": {"node_end": 7, "tool_call": 5, "approval": 1, "checkpoint": 1, "error": 1},
+    "trace_counts": {"node_end": 7, "tool_call": 6, "approval": 1, "checkpoint": 1, "error": 1},
     "publish_trace_statuses": ["failed"]
   }
 }

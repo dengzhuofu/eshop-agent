@@ -1,9 +1,11 @@
 import json
+import socket
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+import app.agents.evaluation.runner as evaluation_runner
 from app.agents.evaluation.results import (
     EvaluationMetric,
     EvaluationResult,
@@ -16,6 +18,8 @@ from app.agents.evaluation.runner import (
     discover_product_launch_fixture_pairs,
     load_product_launch_expectation,
     load_product_launch_scenario,
+    run_product_launch_scenario,
+    run_product_launch_suite,
 )
 
 
@@ -274,3 +278,85 @@ def test_discover_product_launch_fixtures_rejects_mismatched_identity(
 
     with pytest.raises(EvaluationFixtureError, match="identity mismatch"):
         discover_product_launch_fixture_pairs(tmp_path)
+
+
+def test_product_launch_suite_matches_all_seven_scenario_outcomes():
+    results = run_product_launch_suite()
+    by_scenario = {result.scenario_id: result for result in results}
+
+    assert len(results) == 7
+    assert all(result.status == "passed" for result in results)
+    assert all(metric.passed for result in results for metric in result.metrics)
+    assert {
+        scenario_id: result.actual_summary.final_state.value
+        for scenario_id, result in by_scenario.items()
+    } == {
+        "adapter-validation-failure": "failed",
+        "high-risk-supplier": "awaiting_approval",
+        "localization-claim": "awaiting_approval",
+        "low-profit": "awaiting_approval",
+        "missing-approval": "failed",
+        "tampered-version-hash": "failed",
+        "three-platform-approved-publish": "completed",
+    }
+    assert [
+        item.external_listing_id
+        for item in by_scenario["three-platform-approved-publish"].actual_summary.publish
+    ] == [
+        "AMAZON-2fd3bc8059",
+        "SHOPIFY-eb5e767d9e",
+        "TIKTOK_SHOP-7cfa428ece",
+    ]
+    assert (
+        by_scenario["low-profit"].actual_summary.selected_listing_versions[0].content_hash
+        == "623cf8e9440f02aa1be0b165cf314ca4c5ed0b1197075da22603b01b3b7ce7f2"
+    )
+    assert by_scenario["high-risk-supplier"].actual_summary.selected_supplier_id is None
+    assert by_scenario["localization-claim"].actual_summary.localization_risk_count == 1
+    assert by_scenario["missing-approval"].actual_summary.publish == []
+    assert by_scenario["tampered-version-hash"].actual_summary.publish_trace_statuses == []
+    assert by_scenario[
+        "adapter-validation-failure"
+    ].actual_summary.publish_trace_statuses == ["failed"]
+
+
+def test_product_launch_suite_replay_is_deterministic():
+    first = [result.model_dump(mode="json") for result in run_product_launch_suite()]
+    second = [result.model_dump(mode="json") for result in run_product_launch_suite()]
+
+    assert first == second
+
+
+def test_product_launch_suite_makes_no_network_calls(monkeypatch: pytest.MonkeyPatch):
+    def deny_network(*args, **kwargs):
+        raise AssertionError("network access is forbidden in golden evaluations")
+
+    monkeypatch.setattr(socket, "create_connection", deny_network)
+    monkeypatch.setattr(socket.socket, "connect", deny_network)
+
+    assert all(result.status == "passed" for result in run_product_launch_suite())
+
+
+def test_product_launch_scenario_normalizes_workflow_exceptions(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    scenario_path, expected_path = discover_product_launch_fixture_pairs()[0]
+    scenario = load_product_launch_scenario(scenario_path)
+    expected = load_product_launch_expectation(expected_path)
+
+    def raise_workflow_error(*args, **kwargs):
+        raise RuntimeError("sensitive workflow payload")
+
+    monkeypatch.setattr(
+        evaluation_runner,
+        "run_product_launch_preview",
+        raise_workflow_error,
+    )
+
+    result = run_product_launch_scenario(scenario, expected)
+
+    assert result.status == "failed"
+    assert result.tenant_id == scenario.tenant_id
+    assert result.workflow_id == scenario.workflow_id
+    assert result.actual_summary.errors == ["workflow_exception:RuntimeError"]
+    assert all("sensitive workflow payload" not in reason for reason in result.failure_reasons)

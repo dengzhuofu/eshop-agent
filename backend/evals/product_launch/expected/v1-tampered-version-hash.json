@@ -2,7 +2,7 @@
   "schema_version": "product-launch-expectation/v1",
   "scenario_id": "tampered-version-hash",
   "scenario_version": 1,
-  "summary_hash": "08dc60e338a3a0da085914b039fda2941234b5801d24c6d0907db2ee64572897",
+  "summary_hash": "cc21196c625a84c5afc21a67857c55e943f8f5367c0f4b831c5616623654489f",
   "summary": {
     "tenant_id": "tenant_golden",
     "workflow_id": "wf_golden_tampered_hash",
@@ -25,7 +25,7 @@
     ],
     "publish": [],
     "errors": ["approved listing version hash mismatch"],
-    "trace_counts": {"node_end": 7, "tool_call": 4, "approval": 1, "checkpoint": 1, "error": 1},
+    "trace_counts": {"node_end": 7, "tool_call": 5, "approval": 1, "checkpoint": 1, "error": 1},
     "publish_trace_statuses": []
   }
 }

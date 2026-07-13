@@ -2,7 +2,7 @@
   "schema_version": "product-launch-expectation/v1",
   "scenario_id": "high-risk-supplier",
   "scenario_version": 1,
-  "summary_hash": "218db15cc64e90ff0896c732cb073e0d46b84f812aa4e3fec506ca1e2d338f8c",
+  "summary_hash": "72411325bd1eee18e7fe6089c38e7d37e9c3c2f1d3c795b9c8239b4e49525feb",
   "summary": {
     "tenant_id": "tenant_golden",
     "workflow_id": "wf_golden_supplier_risk",
@@ -25,7 +25,7 @@
     ],
     "publish": [],
     "errors": [],
-    "trace_counts": {"node_end": 7, "tool_call": 3, "approval": 1, "checkpoint": 1, "error": 0},
+    "trace_counts": {"node_end": 7, "tool_call": 4, "approval": 1, "checkpoint": 1, "error": 0},
     "publish_trace_statuses": []
   }
 }

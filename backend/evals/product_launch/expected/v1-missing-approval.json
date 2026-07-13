@@ -2,7 +2,7 @@
   "schema_version": "product-launch-expectation/v1",
   "scenario_id": "missing-approval",
   "scenario_version": 1,
-  "summary_hash": "de7ad9821d187c7b4077a655bd838c49da310a77f43045ef8c3d4a6037934501",
+  "summary_hash": "a4d51243d26456fd34b67ed83212ef7a09a92d89dc858def6a2962c29077fc71",
   "summary": {
     "tenant_id": "tenant_golden",
     "workflow_id": "wf_golden_missing_approval",
@@ -25,7 +25,7 @@
     ],
     "publish": [],
     "errors": ["approval request not found"],
-    "trace_counts": {"node_end": 7, "tool_call": 4, "approval": 1, "checkpoint": 1, "error": 1},
+    "trace_counts": {"node_end": 7, "tool_call": 5, "approval": 1, "checkpoint": 1, "error": 1},
     "publish_trace_statuses": []
   }
 }

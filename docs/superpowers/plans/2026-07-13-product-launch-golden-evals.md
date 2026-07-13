@@ -132,10 +132,10 @@ Re-run the focused command; expected PASS. Commit: `feat: 增加 Product Launch 
 
 **Files:** Modify `backend/app/agents/evaluation/runner.py`; modify test.
 
-- [ ] **Step 1: Write RED tests** for seven scenario outcomes, deterministic replay, no-network execution and workflow exceptions normalized to failed `EvaluationResult`.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_product_launch_golden.py -k "suite or scenario or replay or network" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. `ProductLaunchEvaluationRepositories` owns fresh Approval/Snapshot/Trace repositories. A process lock and `contextmanager` patch workflow getters and listing approval getter, then restore them in `finally`.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加 Product Launch 黄金场景回放运行器`.
+- [x] **Step 1: Write RED tests** for seven scenario outcomes, deterministic replay, no-network execution and workflow exceptions normalized to failed `EvaluationResult`.
+- [x] **Step 2: Verify RED** with `pytest tests/test_product_launch_golden.py -k "suite or scenario or replay or network" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. `ProductLaunchEvaluationRepositories` owns fresh Approval/Snapshot/Trace repositories. A process lock and `contextmanager` patch workflow getters and listing approval getter, then restore them in `finally`.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加 Product Launch 黄金场景回放运行器`.
 
 ### Task 4: Repository Isolation And Regression Gate
 

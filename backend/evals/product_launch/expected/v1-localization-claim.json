@@ -2,7 +2,7 @@
   "schema_version": "product-launch-expectation/v1",
   "scenario_id": "localization-claim",
   "scenario_version": 1,
-  "summary_hash": "c709c3c06a31d3707e5d043bbc6d070e2d78600d6c043350d11460e718160ad8",
+  "summary_hash": "06a11698226da5b5543d31cf811eacd8a5a65aca9e48a72d56b74bd50cf4174d",
   "summary": {
     "tenant_id": "tenant_golden",
     "workflow_id": "wf_golden_localization_claim",
@@ -25,7 +25,7 @@
     ],
     "publish": [],
     "errors": [],
-    "trace_counts": {"node_end": 7, "tool_call": 4, "approval": 1, "checkpoint": 1, "error": 0},
+    "trace_counts": {"node_end": 7, "tool_call": 5, "approval": 1, "checkpoint": 1, "error": 0},
     "publish_trace_statuses": []
   }
 }
