@@ -150,9 +150,9 @@ Re-run the focused command; expected PASS. Commit: `feat: 增加 Product Launch 
 
 **Files:** Create `docs/progress/2026-07-13-node-16-product-launch-golden-evals.md`.
 
-- [ ] Run `pytest tests/test_product_launch_golden.py -v`.
-- [ ] Run `pytest tests/test_product_launch_golden.py tests/test_product_launch_graph.py tests/test_workflow_snapshots.py tests/test_trace_events.py tests/test_agent_engineering_contract.py -v`.
-- [ ] Run full `pytest -v` and repository-root `git diff --check`.
-- [ ] Request independent code review against this plan, the shared design and ADR 0002; resolve every Critical/Important issue.
-- [ ] Write the Chinese progress log with scenario catalog, repository isolation, result contract, TDD evidence, real test counts, review outcome and Node 20 boundary.
-- [ ] Commit and push: `docs: 记录第十六节点黄金场景评估进展`; `git push -u origin codex/node-16-product-launch-golden-evals`.
+- [x] Run `pytest tests/test_product_launch_golden.py -v`.
+- [x] Run `pytest tests/test_product_launch_golden.py tests/test_product_launch_graph.py tests/test_workflow_snapshots.py tests/test_trace_events.py tests/test_agent_engineering_contract.py -v`.
+- [x] Run full `pytest -v` and repository-root `git diff --check`.
+- [x] Request independent code review against this plan, the shared design and ADR 0002; resolve every Critical/Important issue.
+- [x] Write the Chinese progress log with scenario catalog, repository isolation, result contract, TDD evidence, real test counts, review outcome and Node 20 boundary.
+- [x] Commit and push: `docs: 记录第十六节点黄金场景评估进展`; `git push -u origin codex/node-16-product-launch-golden-evals`.
