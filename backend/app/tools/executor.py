@@ -5,8 +5,10 @@ from typing import Protocol
 
 from pydantic import BaseModel, ValidationError
 
+from app.domain.enums import ApprovalStatus
+from app.repositories.approvals import ApprovalRepository
 from app.repositories.events import TraceEventRepository
-from app.security.boundary import AgentBoundaryPolicy
+from app.security.boundary import AgentBoundaryPolicy, ToolAccessContext
 from app.tools.catalog import ToolHandlerCatalog
 from app.tools.registry import ToolDefinition, ToolRegistry
 from app.tools.schemas import (
@@ -21,6 +23,31 @@ from app.tools.schemas import (
 
 class ApprovalProofVerifier(Protocol):
     def verify(self, request: ToolRequest, tool: ToolDefinition) -> tuple[bool, list[str]]: ...
+
+
+class RepositoryApprovalProofVerifier:
+    def __init__(self, repository: ApprovalRepository) -> None:
+        self._repository = repository
+
+    def verify(self, request: ToolRequest, tool: ToolDefinition) -> tuple[bool, list[str]]:
+        approval = self._repository.get(request.approval_id)
+        if approval is None:
+            return False, ["approval proof not found"]
+
+        # 审批必须绑定本次执行身份，不能只凭一个已批准 ID 放行其他调用。
+        reasons: list[str] = []
+        if approval.status != ApprovalStatus.APPROVED:
+            reasons.append("approval status is not approved")
+        if approval.tenant_id != request.tenant_id:
+            reasons.append("approval tenant mismatch")
+        if approval.workflow_id != request.workflow_id:
+            reasons.append("approval workflow mismatch")
+        if approval.metadata.get("tool") != tool.name:
+            reasons.append("approval tool mismatch")
+        approved_key = approval.metadata.get("idempotency_key")
+        if approved_key is not None and approved_key != request.idempotency_key:
+            reasons.append("approval idempotency key mismatch")
+        return not reasons, reasons
 
 
 class InMemoryIdempotencyStore:
@@ -76,6 +103,69 @@ class ToolExecutor:
                 tool_version=tool.version,
                 attempts=0,
             )
+
+        access_context = ToolAccessContext(
+            agent_role=request.agent_role,
+            tool_name=request.tool_name,
+            actor_tenant_id=request.tenant_id,
+            target_tenant_id=request.target_tenant_id,
+            actor_permissions=request.actor_permissions,
+            approved=False,
+            payload=request.arguments,
+        )
+        initial_decision = self._boundary_policy.evaluate_tool_access(access_context)
+        non_approval_reasons = [
+            reason for reason in initial_decision.reasons if reason != "approval required"
+        ]
+        if non_approval_reasons:
+            return self._failure(
+                request,
+                started_at,
+                code="access_denied",
+                message="Tool access was denied.",
+                tool_version=tool.version,
+                details=non_approval_reasons,
+                attempts=0,
+            )
+
+        if tool.requires_approval:
+            if request.approval_id is None:
+                return self._failure(
+                    request,
+                    started_at,
+                    code="approval_required",
+                    message="Approved proof is required.",
+                    tool_version=tool.version,
+                    details=["approval proof missing"],
+                    attempts=0,
+                )
+
+            proof_valid, proof_reasons = self._approval_verifier.verify(request, tool)
+            if not proof_valid:
+                return self._failure(
+                    request,
+                    started_at,
+                    code="approval_invalid",
+                    message="Approval proof is invalid.",
+                    tool_version=tool.version,
+                    details=proof_reasons,
+                    attempts=0,
+                )
+
+            # 证明只解除 approval required；其余边界必须再次独立成立。
+            approved_decision = self._boundary_policy.evaluate_tool_access(
+                access_context.model_copy(update={"approved": True})
+            )
+            if not approved_decision.allowed:
+                return self._failure(
+                    request,
+                    started_at,
+                    code="access_denied",
+                    message="Tool access was denied.",
+                    tool_version=tool.version,
+                    details=approved_decision.reasons,
+                    attempts=0,
+                )
 
         if tool.input_model is None or tool.output_model is None:
             return self._failure(

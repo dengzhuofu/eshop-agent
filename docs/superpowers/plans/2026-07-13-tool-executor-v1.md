@@ -164,10 +164,10 @@ Expected: FAIL because schemas/fields are absent.
 
 **Files:** Modify executor/test.
 
-- [ ] **Step 1: Write RED tests** for wrong role, tenant mismatch, missing permission, nested secret, missing/pending/rejected/wrong-tenant/wrong-workflow/wrong-tool approval proof and a valid approved proof.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_tool_executor.py -k "access or tenant or permission or approval or secret" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. First evaluate policy with `approved=False`; non-approval reasons fail immediately. For approval tools verify repository proof, then re-evaluate with `approved=True`.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加工具权限与审批执行边界`.
+- [x] **Step 1: Write RED tests** for wrong role, tenant mismatch, missing permission, nested secret, missing/pending/rejected/wrong-tenant/wrong-workflow/wrong-tool approval proof and a valid approved proof.
+- [x] **Step 2: Verify RED** with `pytest tests/test_tool_executor.py -k "access or tenant or permission or approval or secret" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. First evaluate policy with `approved=False`; non-approval reasons fail immediately. For approval tools verify repository proof, then re-evaluate with `approved=True`.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加工具权限与审批执行边界`.
 
 ### Task 4: Timeout, Retry, Idempotency And Trace
 

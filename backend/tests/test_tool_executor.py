@@ -2,12 +2,12 @@ import asyncio
 import importlib
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
-from app.domain.enums import RiskLevel
-from app.domain.enums import AgentRole
+from app.domain.enums import AgentRole, ApprovalStatus, RiskLevel
 from app.domain.schemas import ListingDraft, ValidationResult
 from app.agents.profiles import list_agent_profiles
+from app.repositories.approvals import ApprovalRepository
 from app.repositories.events import TraceEventRepository
 from app.security.boundary import AgentBoundaryPolicy
 from app.services.profit import ProfitEstimate, ProfitInput
@@ -53,18 +53,24 @@ def _request(
     *,
     agent_role: AgentRole,
     permissions: set[str] | None = None,
+    tenant_id: str = "tenant-a",
+    target_tenant_id: str | None = None,
+    approval_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> ToolRequest:
     return ToolRequest(
         request_id=f"req-{tool_name}",
         tool_name=tool_name,
-        tenant_id="tenant-a",
-        target_tenant_id="tenant-a",
+        tenant_id=tenant_id,
+        target_tenant_id=target_tenant_id or tenant_id,
         workflow_id="wf-1",
         actor_id="actor-1",
         agent_role=agent_role,
         trace_id="trace-1",
-        actor_permissions=permissions or {"workflow:read"},
+        actor_permissions={"workflow:read"} if permissions is None else permissions,
         arguments=arguments,
+        approval_id=approval_id,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -80,7 +86,7 @@ def _context(tool_name: str) -> ToolExecutionContext:
     )
 
 
-def _executor(*, registry=None, handlers=None):
+def _executor(*, registry=None, handlers=None, approval_verifier=None):
     executor_api = _executor_api()
     catalog_api = _catalog_api()
     registry = registry or build_default_registry()
@@ -88,10 +94,93 @@ def _executor(*, registry=None, handlers=None):
         registry=registry,
         handlers=handlers or catalog_api.build_default_handler_catalog(),
         boundary_policy=AgentBoundaryPolicy(list_agent_profiles(), registry),
-        approval_verifier=object(),
+        approval_verifier=approval_verifier or object(),
         idempotency_store=executor_api.InMemoryIdempotencyStore(),
         trace_repository=TraceEventRepository(),
     )
+
+
+def _profit_arguments() -> dict:
+    return {
+        "unit_cost": 8.0,
+        "shipping_cost": 4.0,
+        "duty_rate": 0.1,
+        "marketplace_fee_rate": 0.15,
+        "payment_fee_rate": 0.03,
+        "fulfillment_fee": 3.0,
+        "ad_cost_per_unit": 2.0,
+        "return_rate": 0.05,
+        "target_price": 29.99,
+    }
+
+
+class ApprovalToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: str
+
+
+class ApprovalToolOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: bool
+
+
+def _approval_executor(repository: ApprovalRepository):
+    executor_api = _executor_api()
+    catalog_api = _catalog_api()
+    tool = ToolDefinition(
+        name="publish_listing",
+        description="approval boundary test tool",
+        risk_level=RiskLevel.HIGH,
+        required_permission="listing:publish",
+        requires_approval=True,
+        input_model=ApprovalToolInput,
+        output_model=ApprovalToolOutput,
+    )
+    registry = ToolRegistry([tool])
+    catalog = catalog_api.ToolHandlerCatalog()
+
+    async def handler(input_data, context):
+        return ApprovalToolOutput(accepted=True)
+
+    catalog.register("publish_listing", handler)
+    return _executor(
+        registry=registry,
+        handlers=catalog,
+        approval_verifier=executor_api.RepositoryApprovalProofVerifier(repository),
+    )
+
+
+def _store_approval(
+    repository: ApprovalRepository,
+    *,
+    status: ApprovalStatus = ApprovalStatus.APPROVED,
+    tenant_id: str = "tenant-a",
+    workflow_id: str = "wf-1",
+    tool_name: str = "publish_listing",
+    idempotency_key: str | None = None,
+) -> str:
+    approval_id = "approval-1"
+    metadata = {"tool": tool_name}
+    if idempotency_key is not None:
+        metadata["idempotency_key"] = idempotency_key
+    repository.upsert_pending(
+        approval_id=approval_id,
+        workflow_id=workflow_id,
+        tenant_id=tenant_id,
+        requested_by="actor-1",
+        reason_codes=["high_risk_tool"],
+        risk_level=RiskLevel.HIGH,
+        resource_type="tool_call",
+        resource_id="req-publish_listing",
+        metadata=metadata,
+    )
+    if status == ApprovalStatus.APPROVED:
+        repository.approve(approval_id, reviewer_id="reviewer-1")
+    elif status == ApprovalStatus.REJECTED:
+        repository.reject(approval_id, reviewer_id="reviewer-1")
+    return approval_id
 
 
 def test_retry_policy_contract_enforces_bounds_and_forbids_extra_fields():
@@ -332,4 +421,151 @@ def test_output_schema_failure_is_normalized():
 
     assert result.ok is False
     assert result.code == "output_validation_error"
+    assert result.attempts == 1
+
+
+def test_access_denied_for_wrong_agent_role():
+    request = _request(
+        "estimate_profit",
+        _profit_arguments(),
+        agent_role=AgentRole.PRODUCT_RESEARCH,
+    )
+
+    result = asyncio.run(_executor().execute(request))
+
+    assert result.ok is False
+    assert result.code == "access_denied"
+    assert "not allowed for agent role" in result.details
+    assert result.attempts == 0
+
+
+def test_tenant_mismatch_is_access_denied():
+    request = _request(
+        "estimate_profit",
+        _profit_arguments(),
+        agent_role=AgentRole.PROFIT_ANALYST,
+        target_tenant_id="tenant-b",
+    )
+
+    result = asyncio.run(_executor().execute(request))
+
+    assert result.ok is False
+    assert result.code == "access_denied"
+    assert "tenant mismatch" in result.details
+
+
+def test_missing_permission_is_access_denied():
+    request = _request(
+        "estimate_profit",
+        _profit_arguments(),
+        agent_role=AgentRole.PROFIT_ANALYST,
+        permissions=set(),
+    )
+
+    result = asyncio.run(_executor().execute(request))
+
+    assert result.ok is False
+    assert result.code == "access_denied"
+    assert "missing permission: workflow:read" in result.details
+
+
+def test_nested_secret_is_denied_before_schema_validation():
+    arguments = {**_profit_arguments(), "nested": {"api_token": "must-not-leak"}}
+    request = _request(
+        "estimate_profit",
+        arguments,
+        agent_role=AgentRole.PROFIT_ANALYST,
+    )
+
+    result = asyncio.run(_executor().execute(request))
+
+    assert result.ok is False
+    assert result.code == "access_denied"
+    assert result.details == ["secret-like payload key: nested.api_token"]
+    assert "must-not-leak" not in result.model_dump_json()
+
+
+def test_missing_approval_proof_is_required():
+    repository = ApprovalRepository()
+    request = _request(
+        "publish_listing",
+        {"value": "payload"},
+        agent_role=AgentRole.SUPERVISOR,
+        permissions={"listing:publish"},
+    )
+
+    result = asyncio.run(_approval_executor(repository).execute(request))
+
+    assert result.ok is False
+    assert result.code == "approval_required"
+    assert result.retryable is False
+    assert result.attempts == 0
+
+
+@pytest.mark.parametrize(
+    ("approval_kwargs", "expected_detail"),
+    [
+        ({"status": ApprovalStatus.PENDING}, "approval status is not approved"),
+        ({"status": ApprovalStatus.REJECTED}, "approval status is not approved"),
+        ({"tenant_id": "tenant-b"}, "approval tenant mismatch"),
+        ({"workflow_id": "wf-other"}, "approval workflow mismatch"),
+        ({"tool_name": "update_price"}, "approval tool mismatch"),
+    ],
+    ids=["pending", "rejected", "wrong-tenant", "wrong-workflow", "wrong-tool"],
+)
+def test_approval_proof_must_match_execution_context(approval_kwargs, expected_detail):
+    repository = ApprovalRepository()
+    approval_id = _store_approval(repository, **approval_kwargs)
+    request = _request(
+        "publish_listing",
+        {"value": "payload"},
+        agent_role=AgentRole.SUPERVISOR,
+        permissions={"listing:publish"},
+        approval_id=approval_id,
+    )
+
+    result = asyncio.run(_approval_executor(repository).execute(request))
+
+    assert result.ok is False
+    assert result.code == "approval_invalid"
+    assert expected_detail in result.details
+    assert result.retryable is False
+    assert result.attempts == 0
+
+
+def test_approval_idempotency_key_must_match_when_proof_binds_it():
+    repository = ApprovalRepository()
+    approval_id = _store_approval(repository, idempotency_key="approved-key")
+    request = _request(
+        "publish_listing",
+        {"value": "payload"},
+        agent_role=AgentRole.SUPERVISOR,
+        permissions={"listing:publish"},
+        approval_id=approval_id,
+        idempotency_key="different-key",
+    )
+
+    result = asyncio.run(_approval_executor(repository).execute(request))
+
+    assert result.ok is False
+    assert result.code == "approval_invalid"
+    assert "approval idempotency key mismatch" in result.details
+
+
+def test_valid_approval_proof_allows_handler_execution():
+    repository = ApprovalRepository()
+    approval_id = _store_approval(repository, idempotency_key="same-key")
+    request = _request(
+        "publish_listing",
+        {"value": "payload"},
+        agent_role=AgentRole.SUPERVISOR,
+        permissions={"listing:publish"},
+        approval_id=approval_id,
+        idempotency_key="same-key",
+    )
+
+    result = asyncio.run(_approval_executor(repository).execute(request))
+
+    assert result.ok is True
+    assert result.output == {"accepted": True}
     assert result.attempts == 1
