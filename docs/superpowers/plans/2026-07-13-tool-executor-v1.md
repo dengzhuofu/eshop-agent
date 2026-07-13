@@ -155,10 +155,10 @@ Expected: FAIL because schemas/fields are absent.
 
 **Files:** Create catalog/executor; modify test.
 
-- [ ] **Step 1: Write RED tests** for three default handlers, duplicate handler registration, unknown tool, unbound handler, invalid input not invoking handler and invalid output normalization.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_tool_executor.py -k "handler or schema or unknown" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. Async wrappers call `estimate_profit`, `score_supplier`, and marketplace adapter `validate_listing`; executor validates input before handler and output after handler.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加确定性工具处理器目录`.
+- [x] **Step 1: Write RED tests** for three default handlers, duplicate handler registration, unknown tool, unbound handler, invalid input not invoking handler and invalid output normalization.
+- [x] **Step 2: Verify RED** with `pytest tests/test_tool_executor.py -k "handler or schema or unknown" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. Async wrappers call `estimate_profit`, `score_supplier`, and marketplace adapter `validate_listing`; executor validates input before handler and output after handler.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加确定性工具处理器目录`.
 
 ### Task 3: Permission And Approval Boundary
 
