@@ -2,11 +2,11 @@ import hashlib
 import json
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.domain.enums import Marketplace, RiskLevel, WorkflowState
 
-NonEmptyString = Annotated[str, Field(min_length=1)]
+NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Sha256Hash = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 NonNegativeInt = Annotated[int, Field(ge=0)]
 
@@ -82,6 +82,15 @@ class EvaluationResult(StrictEvaluationModel):
     actual_summary_hash: Sha256Hash
     actual_summary: ProductLaunchEvaluationSummary
     failure_reasons: list[str]
+
+    @model_validator(mode="after")
+    def actual_summary_identity_must_match_result(self) -> "EvaluationResult":
+        if (
+            self.actual_summary.tenant_id != self.tenant_id
+            or self.actual_summary.workflow_id != self.workflow_id
+        ):
+            raise ValueError("actual_summary identity must match evaluation result")
+        return self
 
 
 def canonical_summary_hash(summary: ProductLaunchEvaluationSummary) -> str:

@@ -16,6 +16,7 @@ from app.agents.evaluation.results import (
     EvaluationMetric,
     EvaluationResult,
     ListingValidationEvaluationSummary,
+    NonEmptyString,
     PublishEvaluationSummary,
     ProductLaunchEvaluationSummary,
     SelectedListingVersionEvaluationSummary,
@@ -64,9 +65,9 @@ class StrictFixtureModel(BaseModel):
 
 
 class ProductLaunchScenarioInput(StrictFixtureModel):
-    product_idea: str = Field(min_length=1)
+    product_idea: NonEmptyString
     marketplaces: list[Marketplace] = Field(min_length=1)
-    target_locale: str = Field(min_length=1)
+    target_locale: NonEmptyString
     target_price: float = Field(gt=0)
     risk_preference: Literal["balanced", "supplier_risk", "localization_risk"]
 
@@ -83,10 +84,10 @@ class ProductLaunchScenarioInput(StrictFixtureModel):
 
 class ProductLaunchScenario(StrictFixtureModel):
     schema_version: Literal["product-launch-scenario/v1"]
-    scenario_id: str = Field(min_length=1)
+    scenario_id: NonEmptyString
     scenario_version: int = Field(ge=1)
-    tenant_id: str = Field(min_length=1)
-    workflow_id: str = Field(min_length=1)
+    tenant_id: NonEmptyString
+    workflow_id: NonEmptyString
     action: Literal[
         "preview",
         "approve_and_resume",
@@ -98,7 +99,7 @@ class ProductLaunchScenario(StrictFixtureModel):
 
 class ProductLaunchExpectation(StrictFixtureModel):
     schema_version: Literal["product-launch-expectation/v1"]
-    scenario_id: str = Field(min_length=1)
+    scenario_id: NonEmptyString
     scenario_version: int = Field(ge=1)
     summary_hash: Sha256Hash
     summary: ProductLaunchEvaluationSummary
@@ -490,6 +491,10 @@ def run_product_launch_suite(
 def assert_product_launch_regression_gate(
     results: Sequence[EvaluationResult],
 ) -> None:
+    if not results:
+        raise EvaluationGateError(
+            "Product Launch regression gate failed: no evaluation results"
+        )
     failures: list[str] = []
     for result in results:
         reasons = []

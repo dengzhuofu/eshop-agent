@@ -93,6 +93,23 @@ def test_evaluation_result_is_tenant_scoped_and_score_bounded():
             {**result.model_dump(mode="python"), "tenant_id": ""}
         )
 
+    with pytest.raises(ValidationError, match="tenant_id"):
+        EvaluationResult.model_validate(
+            {**result.model_dump(mode="python"), "tenant_id": "   "}
+        )
+
+    mismatched_summary = result.actual_summary.model_copy(
+        update={"tenant_id": "tenant_other"},
+        deep=True,
+    )
+    with pytest.raises(ValidationError, match="actual_summary identity"):
+        EvaluationResult.model_validate(
+            {
+                **result.model_dump(mode="python"),
+                "actual_summary": mismatched_summary,
+            }
+        )
+
     with pytest.raises(ValidationError, match="score"):
         EvaluationResult.model_validate(
             {**result.model_dump(mode="python"), "score": 1.01}
@@ -242,6 +259,16 @@ def test_scenario_loader_rejects_invalid_marketplaces_or_price(
     )
 
     with pytest.raises(EvaluationFixtureError):
+        load_product_launch_scenario(path)
+
+
+def test_scenario_loader_rejects_whitespace_tenant(tmp_path: Path):
+    path = tmp_path / "invalid-tenant.json"
+    payload = _scenario_payload()
+    payload["tenant_id"] = "   "
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="tenant_id"):
         load_product_launch_scenario(path)
 
 
@@ -474,3 +501,8 @@ def test_product_launch_regression_gate_rejects_any_regression(regression: str):
 
     with pytest.raises(EvaluationGateError, match=first.scenario_id):
         assert_product_launch_regression_gate([regressed, *results[1:]])
+
+
+def test_product_launch_regression_gate_rejects_empty_results():
+    with pytest.raises(EvaluationGateError, match="no evaluation results"):
+        assert_product_launch_regression_gate([])
