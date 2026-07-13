@@ -884,3 +884,59 @@ def test_quality_gate_passes_deterministic_security_baseline() -> None:
     assert report.no_answer_accuracy >= 0.90
     assert report.prompt_injection_success_rate == 0
     assert report.failed_case_ids == ()
+
+
+def test_ingestion_applies_acl_change_even_when_hash_and_version_are_same() -> None:
+    index = InMemoryLexicalSupportIndex()
+    source = make_source()
+    chunk = make_chunk()
+    assert index.ingest(source, [chunk]).status == "ingested"
+
+    updated_source = make_source(
+        permission_scopes=frozenset({"support:admin"}),
+    )
+    updated_chunk = make_chunk(
+        permission_scopes=frozenset({"support:admin"}),
+    )
+    result = index.ingest(updated_source, [updated_chunk])
+    retrieval = index.retrieve(make_retrieval_request())
+
+    assert result.status == "ingested"
+    assert retrieval.candidates == ()
+    assert retrieval.eligible_count == 0
+
+
+def test_ingestion_rejects_cross_source_chunk_id_collision() -> None:
+    index = InMemoryLexicalSupportIndex()
+    assert index.ingest(make_source(), [make_chunk()]).status == "ingested"
+
+    other_source = make_source(source_id="src_other")
+    colliding_chunk = make_chunk(source_id="src_other")
+    result = index.ingest(other_source, [colliding_chunk])
+
+    assert result.status == "failed"
+    assert result.failure_code == "chunk_id_owned_by_other_source"
+    assert tuple(
+        chunk.source_id
+        for chunk in index.active_chunks("tenant_alpha", "src_returns_v1")
+    ) == ("src_returns_v1",)
+
+
+def test_stale_low_score_overlap_is_not_treated_as_stale_evidence() -> None:
+    index = InMemoryLexicalSupportIndex()
+    ingest_document(
+        index,
+        "stale_partial",
+        "The lunar archive is retired.",
+        source_overrides={
+            "effective_from": datetime(2026, 1, 1, tzinfo=UTC),
+            "effective_to": datetime(2026, 7, 12, tzinfo=UTC),
+        },
+    )
+
+    response = SupportRagService(
+        planner=RuleBasedSupportPlanner(), retriever=index
+    ).answer(make_request(query="What is the lunar warranty service protocol?"))
+
+    assert response.status == "insufficient_evidence"
+    assert response.reason_code == "insufficient_evidence"

@@ -65,6 +65,8 @@ class InMemoryLexicalSupportIndex:
             and current.status == "active"
             and current.content_hash == source.content_hash
             and current.index_version == source.index_version
+            and current == source
+            and self._active_chunks_match(source, prepared_chunks)
         ):
             return self._result(
                 source,
@@ -162,7 +164,13 @@ class InMemoryLexicalSupportIndex:
                 chunk.effective_to is not None
                 and chunk.effective_to < request.filters.effective_at
             ):
-                if chunk_key in posting_keys:
+                if (
+                    chunk_key in posting_keys
+                    and self._score_tokens(
+                        query_tokens, self._chunk_tokens[chunk_key]
+                    )
+                    >= request.score_threshold
+                ):
                     stale_filtered_count += 1
                 continue
             eligible_keys.add(chunk_key)
@@ -214,10 +222,18 @@ class InMemoryLexicalSupportIndex:
     def _score_chunk(
         self, query_tokens: frozenset[str], chunk: SupportChunk
     ) -> float:
+        return self._score_tokens(
+            query_tokens,
+            self._chunk_tokens[(chunk.tenant_id, chunk.chunk_id)],
+        )
+
+    @staticmethod
+    def _score_tokens(
+        query_tokens: frozenset[str], chunk_tokens: frozenset[str]
+    ) -> float:
         if not query_tokens:
             return 0.0
-        overlap = query_tokens.intersection(self._chunk_tokens[(chunk.tenant_id, chunk.chunk_id)])
-        return len(overlap) / len(query_tokens)
+        return len(query_tokens.intersection(chunk_tokens)) / len(query_tokens)
 
     @staticmethod
     def _tokenize(text: str) -> frozenset[str]:
@@ -255,6 +271,12 @@ class InMemoryLexicalSupportIndex:
             return "duplicate_chunk_id"
 
         for chunk in chunks:
+            existing_chunk = self._chunks.get((source.tenant_id, chunk.chunk_id))
+            if (
+                existing_chunk is not None
+                and existing_chunk.source_id != source.source_id
+            ):
+                return "chunk_id_owned_by_other_source"
             if chunk.tenant_id != source.tenant_id:
                 return "chunk_tenant_mismatch"
             if chunk.source_id != source.source_id:
@@ -284,6 +306,18 @@ class InMemoryLexicalSupportIndex:
             if chunk.content_hash != expected_hash:
                 return "chunk_hash_mismatch"
         return None
+
+    def _active_chunks_match(
+        self, source: SupportSource, chunks: tuple[SupportChunk, ...]
+    ) -> bool:
+        key = (source.tenant_id, source.source_id)
+        active_chunk_ids = self._source_chunks.get(key, set())
+        if active_chunk_ids != {chunk.chunk_id for chunk in chunks}:
+            return False
+        return all(
+            self._chunks.get((source.tenant_id, chunk.chunk_id)) == chunk
+            for chunk in chunks
+        )
 
     @staticmethod
     def _result(
