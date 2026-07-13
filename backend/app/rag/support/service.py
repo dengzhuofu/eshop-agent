@@ -9,6 +9,7 @@ from app.domain.support import (
 )
 from app.rag.support.context import assemble_context
 from app.rag.support.ports import SupportPlanner, SupportRetriever
+from app.rag.support.safety import filter_unsafe_candidates
 
 
 class SupportRagService:
@@ -81,19 +82,65 @@ class SupportRagService:
                 score_threshold=RETRIEVAL_CONFIG["score_threshold"],
             )
         )
-        context = assemble_context(result, max_chunks=5, max_chars=4000)
+        if result.status == "unavailable":
+            unavailable_trace = SupportTraceSummary(
+                trace_id=request.trace_id,
+                tenant_id=request.tenant_id,
+                route=decision.route,
+                index_version=result.index_version,
+                eligible_count=0,
+                candidate_count=0,
+                selected_count=0,
+                source_ids=(),
+                scores=(),
+                decision="retrieval_unavailable",
+                error_categories=(result.failure_code or "retrieval_unavailable",),
+            )
+            return SupportResponse(
+                trace_id=request.trace_id,
+                tenant_id=request.tenant_id,
+                status="escalated",
+                draft="Knowledge retrieval is unavailable; human review is required.",
+                citations=(),
+                transaction_request=None,
+                requires_human_review=True,
+                reason_code="retrieval_unavailable",
+                trace=unavailable_trace,
+            )
+
+        safe_result, unsafe_count = filter_unsafe_candidates(result)
+        context = assemble_context(safe_result, max_chunks=5, max_chars=4000)
+        error_categories = tuple(
+            category
+            for category in (
+                result.failure_code,
+                "unsafe_evidence" if unsafe_count else None,
+            )
+            if category is not None
+        )
+        if not context.blocks:
+            if result.stale_filtered_count:
+                reason_code = "stale_evidence"
+            elif unsafe_count:
+                reason_code = "unsafe_evidence"
+            else:
+                reason_code = "insufficient_evidence"
+        else:
+            reason_code = "draft"
         response_trace = SupportTraceSummary(
             trace_id=request.trace_id,
             tenant_id=request.tenant_id,
             route=decision.route,
-            index_version=result.index_version,
+            index_version=(
+                None if reason_code == "insufficient_evidence" else result.index_version
+            ),
             eligible_count=result.eligible_count,
             candidate_count=len(result.candidates),
             selected_count=len(context.blocks),
             source_ids=tuple(block.candidate.source_id for block in context.blocks),
             scores=tuple(block.candidate.score for block in context.blocks),
-            decision="draft" if context.blocks else "insufficient_evidence",
-            error_categories=(result.failure_code,) if result.failure_code else (),
+            decision=reason_code,
+            error_categories=error_categories,
         )
         if not context.blocks:
             return SupportResponse(
@@ -104,7 +151,7 @@ class SupportRagService:
                 citations=(),
                 transaction_request=None,
                 requires_human_review=True,
-                reason_code="insufficient_evidence",
+                reason_code=reason_code,
                 trace=response_trace,
             )
 

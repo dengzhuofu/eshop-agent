@@ -209,10 +209,10 @@ Expected: collection FAIL because contracts are absent.
 
 **Files:** Create safety; modify service/test.
 
-- [ ] **Step 1: Write RED tests** for ACL denial indistinguishable from empty corpus, stale-only evidence, injected document attempting to alter system/tool/filter/citation, safe neighbor survival, index unavailable and exactly one retrieval with no refinement loop.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "insufficient or stale or injection or unavailable or refinement" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. Unsafe chunks never enter context. Empty/ACL -> generic `insufficient_evidence`; stale -> `stale_evidence`; outage -> `escalated/retrieval_unavailable`; all require human review and have no citations.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `fix: 阻断客服 RAG 过期与注入证据`.
+- [x] **Step 1: Write RED tests** for ACL denial indistinguishable from empty corpus, stale-only evidence, injected document attempting to alter system/tool/filter/citation, safe neighbor survival, index unavailable and exactly one retrieval with no refinement loop.
+- [x] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "insufficient or stale or injection or unavailable or refinement" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. Unsafe chunks never enter context. Empty/ACL -> generic `insufficient_evidence`; stale -> `stale_evidence`; outage -> `escalated/retrieval_unavailable`; all require human review and have no citations.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `fix: 阻断客服 RAG 过期与注入证据`.
 
 ### Task 6: Mock Corpus And Security Evaluation Set
 
