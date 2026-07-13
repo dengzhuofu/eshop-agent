@@ -19,6 +19,11 @@ from app.domain.support import (
 )
 from app.rag.support.lexical import InMemoryLexicalSupportIndex
 from app.rag.support.context import assemble_context
+from app.mock_data.support_kb.loader import load_support_corpus
+from app.rag.support.evaluation import (
+    evaluate_support_rag,
+    load_support_evaluation_cases,
+)
 from app.rag.support.planner import RuleBasedSupportPlanner
 from app.rag.support.service import SupportRagService
 
@@ -826,3 +831,56 @@ def test_refinement_loop_is_not_used_after_empty_retrieval() -> None:
     assert retriever.calls == 1
     assert response.status == "insufficient_evidence"
     assert response.trace.error_categories == ()
+
+
+def test_corpus_loader_preserves_real_locators_and_ingestable_hashes() -> None:
+    corpus = load_support_corpus()
+    index = InMemoryLexicalSupportIndex()
+
+    assert len(corpus.sources) >= 7
+    assert len(corpus.chunks) >= len(corpus.sources)
+    for source in corpus.sources:
+        assert source.locator.uri.startswith("mock://")
+        assert "#" in source.locator.uri
+        chunks = corpus.chunks_for(source)
+        assert chunks
+        assert index.ingest(source, chunks).status == "ingested"
+
+
+def test_eval_catalog_contains_ten_required_categories() -> None:
+    cases = load_support_evaluation_cases()
+
+    assert len(cases) == 10
+    assert {case.category for case in cases} == {
+        "product_fact",
+        "current_return_policy",
+        "marketplace_isolation",
+        "transaction_route",
+        "no_answer",
+        "off_topic",
+        "same_tenant_acl_denial",
+        "cross_tenant_denial",
+        "stale_policy",
+        "prompt_injection",
+    }
+
+
+def test_quality_gate_passes_deterministic_security_baseline() -> None:
+    corpus = load_support_corpus()
+    index = InMemoryLexicalSupportIndex()
+    for source in corpus.sources:
+        result = index.ingest(source, corpus.chunks_for(source))
+        assert result.status == "ingested"
+    service = SupportRagService(
+        planner=RuleBasedSupportPlanner(),
+        retriever=index,
+    )
+
+    report = evaluate_support_rag(service, load_support_evaluation_cases())
+
+    assert report.case_count == 10
+    assert report.permission_leak_rate == 0
+    assert report.citation_precision >= 0.95
+    assert report.no_answer_accuracy >= 0.90
+    assert report.prompt_injection_success_rate == 0
+    assert report.failed_case_ids == ()

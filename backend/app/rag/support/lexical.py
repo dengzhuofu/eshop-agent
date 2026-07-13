@@ -135,6 +135,9 @@ class InMemoryLexicalSupportIndex:
 
     def retrieve(self, request: RetrievalRequest) -> RetrievalResult:
         query_tokens = self._tokenize(request.query)
+        posting_keys: set[tuple[str, str]] = set()
+        for token in query_tokens:
+            posting_keys.update(self._postings.get(token, set()))
         eligible_keys: set[tuple[str, str]] = set()
         stale_filtered_count = 0
 
@@ -159,13 +162,10 @@ class InMemoryLexicalSupportIndex:
                 chunk.effective_to is not None
                 and chunk.effective_to < request.filters.effective_at
             ):
-                stale_filtered_count += 1
+                if chunk_key in posting_keys:
+                    stale_filtered_count += 1
                 continue
             eligible_keys.add(chunk_key)
-
-        posting_keys: set[tuple[str, str]] = set()
-        for token in query_tokens:
-            posting_keys.update(self._postings.get(token, set()))
 
         scored: list[tuple[float, SupportChunk]] = []
         for chunk_key in sorted(posting_keys & eligible_keys):

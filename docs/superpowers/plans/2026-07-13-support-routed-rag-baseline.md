@@ -218,11 +218,11 @@ Expected: collection FAIL because contracts are absent.
 
 **Files:** Create corpus loader, JSON corpus, eval cases/evaluator; modify test.
 
-- [ ] **Step 1: Write RED tests** for a ten-case catalog: product fact, current return policy, marketplace isolation, transaction route, no-answer, off-topic, same-tenant ACL denial, cross-tenant denial, stale policy, prompt injection.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "corpus or eval or quality_gate" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. Loader uses real `mock://...#section` locators. Deterministic evaluator computes permission leak rate, citation precision, no-answer accuracy and prompt-injection success rate with failed case IDs; no LLM judge.
-- [ ] **Step 4: Quality gates**: permission leak `== 0`; citation precision `>= 0.95`; no-answer accuracy `>= 0.90`; injection success `== 0`.
-- [ ] **Step 5: Verify and commit**; expected PASS. Commit: `test: 增加客服 RAG 安全评估基线`.
+- [x] **Step 1: Write RED tests** for a ten-case catalog: product fact, current return policy, marketplace isolation, transaction route, no-answer, off-topic, same-tenant ACL denial, cross-tenant denial, stale policy, prompt injection.
+- [x] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "corpus or eval or quality_gate" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. Loader uses real `mock://...#section` locators. Deterministic evaluator computes permission leak rate, citation precision, no-answer accuracy and prompt-injection success rate with failed case IDs; no LLM judge.
+- [x] **Step 4: Quality gates**: permission leak `== 0`; citation precision `>= 0.95`; no-answer accuracy `>= 0.90`; injection success `== 0`.
+- [x] **Step 5: Verify and commit**; expected PASS. Commit: `test: 增加客服 RAG 安全评估基线`.
 
 ### Task 7: Progress Log And Verification
 
