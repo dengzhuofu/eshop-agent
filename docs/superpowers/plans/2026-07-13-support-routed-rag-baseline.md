@@ -182,10 +182,10 @@ Expected: collection FAIL because contracts are absent.
 
 **Files:** Create lexical index; modify test.
 
-- [ ] **Step 1: Write RED tests** for idempotency by tenant/source/hash/index version, atomic version replacement, old chunk tombstones, tenant-scoped repeated tombstone and rejected weaker ACL/chunk hash mismatch.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "ingestion or tombstone" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. Index active source by `(tenant_id, source_id)`; same hash/version -> `skipped`; new version atomically replaces active chunks; duplicate tombstone -> `skipped`; bad metadata -> stable failed result.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 实现客服知识幂等摄取`.
+- [x] **Step 1: Write RED tests** for idempotency by tenant/source/hash/index version, atomic version replacement, old chunk tombstones, tenant-scoped repeated tombstone and rejected weaker ACL/chunk hash mismatch.
+- [x] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "ingestion or tombstone" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. Index active source by `(tenant_id, source_id)`; same hash/version -> `skipped`; new version atomically replaces active chunks; duplicate tombstone -> `skipped`; bad metadata -> stable failed result.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 实现客服知识幂等摄取`.
 
 ### Task 3: Deterministic Planner And Transaction Route
 
