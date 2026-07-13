@@ -127,11 +127,11 @@ Expected: collection FAIL because domain module is absent.
 
 **Files:** Create service; modify test.
 
-- [ ] **Step 1: Write RED tests** for identical duplicate dedupe, conflicting event ID failure, malicious cross-tenant port, hash drift, future event exclusion, late/out-of-order diagnostics, latest observation selection, threshold equality, zero baseline and healthy controls.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_operations_agent.py -k "read_model or freshness or anomaly or proposal or summary" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. Select latest by `(observed_at, received_at, event_id)`; only fresh evidence may produce anomalies. Every evidence/anomaly/proposal preserves source event IDs and listing version identity.
-- [ ] **Step 4: Implement safe mapping**: low stock -> replenish proposal; shipment delay -> support strategy; conversion drop -> price review plus listing optimization; return rise -> listing optimization. All proposals use `RiskLevel.HIGH`, `approval_required_for_execution=True`, `execution_allowed=False`.
-- [ ] **Step 5: Verify and commit**; expected PASS. Commit: `feat: 增加运营异常检测与证据建议`.
+- [x] **Step 1: Write RED tests** for identical duplicate dedupe, conflicting event ID failure, malicious cross-tenant port, hash drift, future event exclusion, late/out-of-order diagnostics, latest observation selection, threshold equality, zero baseline and healthy controls.
+- [x] **Step 2: Verify RED** with `pytest tests/test_operations_agent.py -k "read_model or freshness or anomaly or proposal or summary" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. Select latest by `(observed_at, received_at, event_id)`; only fresh evidence may produce anomalies. Every evidence/anomaly/proposal preserves source event IDs and listing version identity.
+- [x] **Step 4: Implement safe mapping**: low stock -> replenish proposal; shipment delay -> support strategy; conversion drop -> price review plus listing optimization; return rise -> listing optimization. All proposals use `RiskLevel.HIGH`, `approval_required_for_execution=True`, `execution_allowed=False`.
+- [x] **Step 5: Verify and commit**; expected PASS. Commit: `feat: 增加运营异常检测与证据建议`.
 
 ### Task 4: Independent Ops StateGraph
 
