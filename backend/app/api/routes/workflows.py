@@ -1,7 +1,7 @@
 import hashlib
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.agents.graphs.workflows.product_launch import (
     run_product_launch_preview,
@@ -17,10 +17,17 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 class WorkflowCreateRequest(BaseModel):
     product_idea: str = Field(min_length=1)
-    target_marketplaces: list[Marketplace]
+    target_marketplaces: list[Marketplace] = Field(min_length=1)
     target_locale: str = "en-US"
     target_price: float = Field(gt=0)
     risk_preference: str = "balanced"
+
+    @field_validator("target_marketplaces")
+    @classmethod
+    def validate_unique_marketplaces(cls, marketplaces: list[Marketplace]) -> list[Marketplace]:
+        if len(marketplaces) != len(set(marketplaces)):
+            raise ValueError("target_marketplaces must not contain duplicates")
+        return marketplaces
 
 
 class WorkflowResumeRequest(BaseModel):
@@ -64,6 +71,9 @@ def create_workflow(request: WorkflowCreateRequest) -> dict:
         "supplier_risk_level": state["supplier_risk_level"],
         "listing_drafts": state["listing_drafts"],
         "localized_listings": state["localized_listings"],
+        "listing_versions": state["listing_versions"],
+        "selected_listing_version_ids": state["selected_listing_version_ids"],
+        "approved_listing_version_ids": state["approved_listing_version_ids"],
         "localization_risk_flags": state["localization_risk_flags"],
         "listing_validations": state["listing_validations"],
         "approval_required": state["approval_required"],
@@ -76,6 +86,7 @@ def create_workflow(request: WorkflowCreateRequest) -> dict:
             "id": snapshot.id,
             "checkpoint_name": snapshot.checkpoint_name,
             "version": snapshot.version,
+            "selected_listing_version_ids": snapshot.state.get("selected_listing_version_ids", []),
         },
         "completed_steps": state["completed_steps"],
     }
@@ -102,6 +113,9 @@ def resume_workflow(workflow_id: str, request: WorkflowResumeRequest) -> dict:
         "target_locale": state["target_locale"],
         "listing_drafts": state["listing_drafts"],
         "localized_listings": state["localized_listings"],
+        "listing_versions": state["listing_versions"],
+        "selected_listing_version_ids": state["selected_listing_version_ids"],
+        "approved_listing_version_ids": state["approved_listing_version_ids"],
         "localization_risk_flags": state["localization_risk_flags"],
         "tool_calls": state["tool_calls"],
         "completed_steps": state["completed_steps"],

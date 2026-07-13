@@ -48,7 +48,7 @@ def get_node_contracts() -> list[NodeContract]:
             name="listing_validation",
             owner_agent=AgentRole.LISTING,
             side_effect=NodeSideEffect.DETERMINISTIC,
-            output_keys={"listing_validations", "tool_calls"},
+            output_keys={"listing_versions", "listing_validations", "tool_calls"},
         ),
         NodeContract(
             name="localization",
@@ -57,6 +57,8 @@ def get_node_contracts() -> list[NodeContract]:
             output_keys={
                 "listing_drafts",
                 "localized_listings",
+                "listing_versions",
+                "selected_listing_version_ids",
                 "localization_risk_flags",
                 "tool_calls",
                 "evidence",
@@ -72,6 +74,11 @@ def get_node_contracts() -> list[NodeContract]:
             name="publish_listing",
             owner_agent=AgentRole.SUPERVISOR,
             side_effect=NodeSideEffect.APPROVAL_GATED,
-            output_keys={"tool_calls"},
+            output_keys={
+                "approved_listing_version_ids",
+                "listing_versions",
+                "publish_results",
+                "tool_calls",
+            },
         ),
     ]

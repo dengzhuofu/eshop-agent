@@ -27,6 +27,9 @@ class CommerceAgentState(TypedDict):
     supplier_risk_level: str
     listing_drafts: list[dict[str, Any]]
     localized_listings: list[dict[str, Any]]
+    listing_versions: list[dict[str, Any]]
+    selected_listing_version_ids: list[str]
+    approved_listing_version_ids: list[str]
     localization_risk_flags: list[dict[str, Any]]
     listing_validations: list[dict[str, Any]]
     publish_results: list[dict[str, Any]]
@@ -68,6 +71,9 @@ def create_initial_state(
         "supplier_risk_level": "unknown",
         "listing_drafts": [],
         "localized_listings": [],
+        "listing_versions": [],
+        "selected_listing_version_ids": [],
+        "approved_listing_version_ids": [],
         "localization_risk_flags": [],
         "listing_validations": [],
         "publish_results": [],

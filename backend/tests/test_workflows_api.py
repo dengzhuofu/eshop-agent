@@ -53,6 +53,12 @@ def test_create_workflow_returns_deterministic_preview():
     assert len(data["localized_listings"]) == 3
     assert all(item["locale"] == "en-GB" for item in data["localized_listings"])
     assert any("unit_style" in item["changes"] for item in data["localized_listings"])
+    assert len(data["listing_versions"]) == 6
+    assert len(data["selected_listing_version_ids"]) == 3
+    assert data["approval_request"]["metadata"]["listing_version_ids"] == data["selected_listing_version_ids"]
+    assert set(data["approval_request"]["metadata"]["listing_version_hashes"]) == set(
+        data["selected_listing_version_ids"]
+    )
     assert data["localization_risk_flags"] == []
     assert len(data["listing_validations"]) == 3
     assert {item["marketplace"] for item in data["listing_validations"]} == {
@@ -61,6 +67,18 @@ def test_create_workflow_returns_deterministic_preview():
         "tiktok_shop",
     }
     assert "publish_listing" in data["approval_reasons"]
+
+
+def test_create_workflow_rejects_empty_or_duplicate_marketplaces():
+    client = TestClient(create_app())
+
+    for marketplaces in ([], ["amazon", "amazon"]):
+        response = client.post(
+            "/workflows",
+            json={**WORKFLOW_REQUEST, "target_marketplaces": marketplaces},
+        )
+
+        assert response.status_code == 422
 
 
 def test_create_workflow_response_includes_snapshot_metadata():
@@ -73,6 +91,7 @@ def test_create_workflow_response_includes_snapshot_metadata():
 
     assert data["snapshot"]["checkpoint_name"] == "await_approval"
     assert data["snapshot"]["version"] == 1
+    assert data["snapshot"]["selected_listing_version_ids"] == data["selected_listing_version_ids"]
 
 
 def test_workflow_resume_publishes_after_approval():
@@ -93,9 +112,15 @@ def test_workflow_resume_publishes_after_approval():
     assert data["target_locale"] == "en-GB"
     assert len(data["listing_drafts"]) == 3
     assert len(data["localized_listings"]) == 3
+    assert len(data["listing_versions"]) == 6
+    assert data["selected_listing_version_ids"] == response.json()["selected_listing_version_ids"]
+    assert data["approved_listing_version_ids"] == data["selected_listing_version_ids"]
     assert data["localization_risk_flags"] == []
     assert len(data["publish_results"]) == 3
     assert all(item["status"] == "published" for item in data["publish_results"])
+    assert {item["listing_version_id"] for item in data["publish_results"]} == set(
+        data["selected_listing_version_ids"]
+    )
 
 
 def test_workflow_resume_returns_409_when_localized_listing_is_invalid():

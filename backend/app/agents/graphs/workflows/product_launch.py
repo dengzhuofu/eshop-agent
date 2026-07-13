@@ -1,12 +1,14 @@
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.observability.schema import TraceEventType, create_trace_event
-from app.agents.graphs.nodes.product_launch import (
+from app.agents.graphs.nodes.listings import (
     await_approval_node,
-    complete_node,
     listing_validation_node,
     localization_node,
     publish_listing_node,
+)
+from app.agents.graphs.nodes.product_launch import (
+    complete_node,
     product_research_node,
     profit_analysis_node,
     risk_review_node,
@@ -18,6 +20,7 @@ from app.domain.enums import AgentRole, Marketplace, WorkflowState
 from app.repositories.approvals import get_approval_repository
 from app.repositories.events import get_trace_event_repository
 from app.repositories.snapshots import get_workflow_snapshot_repository
+from app.services.listing_versions import listing_version_summary
 
 STEP_AGENT_ROLES = {
     "product_research": AgentRole.PRODUCT_RESEARCH,
@@ -73,10 +76,16 @@ def build_product_launch_publish_graph():
 def _step_event_metadata(state: CommerceAgentState, step: str) -> dict:
     metadata = {"current_step": str(state["current_step"])}
     if step == "localization":
+        listing_versions = state.get("listing_versions", [])
         metadata.update(
             {
                 "target_locale": state["target_locale"],
                 "localized_listing_count": len(state["localized_listings"]),
+                "listing_version_count": len(listing_versions),
+                "selected_listing_version_ids": state.get("selected_listing_version_ids", []),
+                "listing_version_summary": [
+                    listing_version_summary(version) for version in listing_versions
+                ],
                 "localization_risk_count": len(state["localization_risk_flags"]),
                 "marketplaces": [item["marketplace"] for item in state["localized_listings"]],
             }
@@ -231,6 +240,8 @@ def run_product_launch_publish_resume(approval_request_id: str | None) -> Commer
     initial_state["risk_level"] = approval.risk_level
     state = build_product_launch_publish_graph().invoke(initial_state)
     if WorkflowState(state["current_step"]) == WorkflowState.FAILED:
+        # 多平台发布可能部分成功；失败路径也必须留下已经发生的外部副作用。
+        _record_tool_call_events(state, only_tool="publish_listing")
         _record_error_events(state)
     else:
         _record_completed_step_events(state, steps=["publish_listing"])

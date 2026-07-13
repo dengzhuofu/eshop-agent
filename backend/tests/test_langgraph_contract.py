@@ -23,6 +23,9 @@ def test_initial_langgraph_state_contains_required_agent_fields():
     assert state["target_locale"] == "en-US"
     assert state["listing_drafts"] == []
     assert state["localized_listings"] == []
+    assert state["listing_versions"] == []
+    assert state["selected_listing_version_ids"] == []
+    assert state["approved_listing_version_ids"] == []
     assert state["localization_risk_flags"] == []
 
 
@@ -44,10 +47,23 @@ def test_node_contracts_separate_read_only_and_approval_gated_nodes():
     assert {
         "listing_drafts",
         "localized_listings",
+        "listing_versions",
+        "selected_listing_version_ids",
         "localization_risk_flags",
         "tool_calls",
         "evidence",
     }.issubset(contracts["localization"].output_keys)
+    assert {
+        "listing_versions",
+        "listing_validations",
+        "tool_calls",
+    }.issubset(contracts["listing_validation"].output_keys)
+    assert {
+        "approved_listing_version_ids",
+        "listing_versions",
+        "publish_results",
+        "tool_calls",
+    }.issubset(contracts["publish_listing"].output_keys)
 
 
 def test_approval_route_does_not_execute_side_effects():
