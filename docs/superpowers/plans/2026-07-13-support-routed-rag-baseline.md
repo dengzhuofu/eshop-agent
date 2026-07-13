@@ -228,9 +228,9 @@ Expected: collection FAIL because contracts are absent.
 
 **Files:** Create progress log.
 
-- [ ] Run focused `pytest tests/test_support_rag.py -v`.
-- [ ] Run full `pytest -v`, compile check and repository-root `git diff --check`.
-- [ ] Request independent review against shared design, PRD sections 7.11/15.3 and production RAG security/evaluation requirements; resolve every Critical/Important issue.
-- [ ] Write Chinese log with contracts, ingestion lifecycle, route matrix, ACL/injection defense, eval gates, real test counts and Node 20 boundary.
-- [ ] Confirm branch diff contains only Node 19 owned paths.
+- [x] Run focused `pytest tests/test_support_rag.py -v`.
+- [x] Run full `pytest -v`, compile check and repository-root `git diff --check`.
+- [x] Request independent review against shared design, PRD sections 7.11/15.3 and production RAG security/evaluation requirements; resolve every Critical/Important issue. 当前环境未暴露独立子 Agent 工具，限制已写入进度日志，并以完整 branch diff 对照审查补充验证。
+- [x] Write Chinese log with contracts, ingestion lifecycle, route matrix, ACL/injection defense, eval gates, real test counts and Node 20 boundary.
+- [x] Confirm branch diff contains only Node 19 owned paths.
 - [ ] Commit and push: `docs: 记录第十九节点客服 RAG 实现进度`; `git push -u origin codex/node-19-support-rag`.
