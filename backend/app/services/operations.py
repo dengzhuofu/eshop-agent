@@ -69,6 +69,19 @@ def _stream_key(record: OperationsRecord) -> tuple[object, ...]:
     return (*identity, record.metric_name, record.window_start, record.window_end)
 
 
+def _ordering_stream_key(record: OperationsRecord) -> tuple[object, ...]:
+    if isinstance(record, MetricEvent):
+        return (
+            record.tenant_id,
+            record.marketplace,
+            record.listing_version_id,
+            record.sku,
+            record.record_type,
+            record.metric_name,
+        )
+    return _stream_key(record)
+
+
 def _diagnostic(record: OperationsRecord, code: str) -> OperationsDiagnostic:
     return OperationsDiagnostic(
         tenant_id=record.tenant_id,
@@ -185,7 +198,7 @@ def _out_of_order_diagnostics(records: list[OperationsRecord]) -> list[Operation
     diagnostics: list[OperationsDiagnostic] = []
     streams: dict[tuple[object, ...], list[OperationsRecord]] = defaultdict(list)
     for record in records:
-        streams[_stream_key(record)].append(record)
+        streams[_ordering_stream_key(record)].append(record)
     for stream_records in streams.values():
         latest_observed_at: datetime | None = None
         for record in sorted(stream_records, key=lambda item: (item.received_at, item.event_id)):

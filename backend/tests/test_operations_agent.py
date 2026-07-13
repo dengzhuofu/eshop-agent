@@ -410,6 +410,38 @@ def test_read_model_excludes_future_and_records_freshness_ordering_diagnostics()
     }
 
 
+def test_read_model_marks_metric_windows_received_out_of_order():
+    newer = _metric_event(
+        event_id="metric-newer-window",
+        observed_at=AS_OF - timedelta(hours=1),
+        received_at=AS_OF - timedelta(minutes=50),
+        window_start=AS_OF - timedelta(days=1, hours=1),
+        window_end=AS_OF - timedelta(hours=1),
+    )
+    older_late = _metric_event(
+        event_id="metric-older-window-late",
+        observed_at=AS_OF - timedelta(days=1),
+        received_at=AS_OF - timedelta(minutes=40),
+        window_start=AS_OF - timedelta(days=2),
+        window_end=AS_OF - timedelta(days=1),
+    )
+
+    read_model = build_operations_read_model(
+        SeededOperationsReadAdapter([newer, older_late]),
+        OperationsReadQuery(tenant_id="tenant-a", as_of=AS_OF),
+    )
+
+    assert {record.event_id for record in read_model.records} == {
+        "metric-newer-window",
+        "metric-older-window-late",
+    }
+    assert any(
+        diagnostic.event_id == "metric-older-window-late"
+        and diagnostic.code == "out_of_order"
+        for diagnostic in read_model.diagnostics
+    )
+
+
 def test_freshness_policy_includes_exact_boundary_and_marks_older_record_stale():
     exact = _order_event(
         event_id="order-exact",
