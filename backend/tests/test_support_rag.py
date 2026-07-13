@@ -6,6 +6,8 @@ from pydantic import ValidationError
 
 from app.domain.support import (
     RetrievalCandidate,
+    RetrievalFilters,
+    RetrievalRequest,
     RetrievalResult,
     SourceLocator,
     SupportCitation,
@@ -16,6 +18,7 @@ from app.domain.support import (
     SupportTraceSummary,
 )
 from app.rag.support.lexical import InMemoryLexicalSupportIndex
+from app.rag.support.context import assemble_context
 from app.rag.support.planner import RuleBasedSupportPlanner
 from app.rag.support.service import SupportRagService
 
@@ -102,6 +105,83 @@ def make_chunk(**overrides: object) -> SupportChunk:
     }
     values.update(overrides)
     return SupportChunk(**values)
+
+
+def ingest_document(
+    index: InMemoryLexicalSupportIndex,
+    suffix: str,
+    text: str,
+    *,
+    source_overrides: dict[str, object] | None = None,
+    chunk_overrides: dict[str, object] | None = None,
+) -> None:
+    source_values: dict[str, object] = {
+        "source_id": f"src_{suffix}",
+        "content_hash": hash_text(f"source:{suffix}:{text}"),
+    }
+    source_values.update(source_overrides or {})
+    source = make_source(**source_values)
+    chunk_values: dict[str, object] = {
+        "chunk_id": f"chunk_{suffix}",
+        "source_id": source.source_id,
+        "tenant_id": source.tenant_id,
+        "text": text,
+        "permission_scopes": source.permission_scopes,
+        "marketplace": source.marketplace,
+        "locale": source.locale,
+        "product_id": source.product_id,
+        "policy_version": source.policy_version,
+        "authority": source.authority,
+        "effective_from": source.effective_from,
+        "effective_to": source.effective_to,
+        "content_hash": hash_text(text),
+        "index_version": source.index_version,
+        "locator": source.locator,
+    }
+    chunk_values.update(chunk_overrides or {})
+    result = index.ingest(source, [make_chunk(**chunk_values)])
+    assert result.status == "ingested"
+
+
+def make_retrieval_request(**overrides: object) -> RetrievalRequest:
+    filter_values: dict[str, object] = {
+        "tenant_id": "tenant_alpha",
+        "actor_permission_scopes": frozenset({"support:policy"}),
+        "marketplace": "amazon",
+        "locale": "en-US",
+        "product_id": None,
+        "effective_at": NOW,
+    }
+    filter_values.update(overrides.pop("filter_overrides", {}))  # type: ignore[arg-type]
+    values: dict[str, object] = {
+        "trace_id": "trace_001",
+        "tenant_id": "tenant_alpha",
+        "query": "refund policy eligibility",
+        "filters": RetrievalFilters(**filter_values),
+        "top_k": 20,
+        "score_threshold": 0.3,
+    }
+    values.update(overrides)
+    return RetrievalRequest(**values)
+
+
+def make_candidate(**overrides: object) -> RetrievalCandidate:
+    values: dict[str, object] = {
+        "chunk_id": "chunk_001",
+        "parent_id": "parent_returns",
+        "source_id": "src_returns_v1",
+        "tenant_id": "tenant_alpha",
+        "title": "Return Policy",
+        "text": "Returns are accepted within 30 days.",
+        "score": 0.8,
+        "content_hash": CONTENT_HASH,
+        "index_version": "support-v1",
+        "policy_version": "returns-2026-07",
+        "authority": "authoritative",
+        "locator": make_locator(),
+    }
+    values.update(overrides)
+    return RetrievalCandidate(**values)
 
 
 @pytest.mark.parametrize("field", ["tenant_id", "permission_scopes"])
@@ -412,3 +492,204 @@ def test_planner_non_rag_routes_do_not_invoke_retriever(
     assert response.reason_code == reason_code
     assert response.citations == ()
     assert retriever.calls == 0
+
+
+def test_retrieval_prefilters_tenant_and_acl_before_scoring() -> None:
+    class RecordingIndex(InMemoryLexicalSupportIndex):
+        def __init__(self) -> None:
+            super().__init__()
+            self.scored_chunk_ids: list[str] = []
+
+        def _score_chunk(self, query_tokens: frozenset[str], chunk: SupportChunk) -> float:
+            self.scored_chunk_ids.append(chunk.chunk_id)
+            return super()._score_chunk(query_tokens, chunk)
+
+    index = RecordingIndex()
+    ingest_document(index, "allowed", "Refund policy eligibility is thirty days.")
+    ingest_document(
+        index,
+        "restricted",
+        "Refund policy eligibility is ninety days.",
+        source_overrides={"permission_scopes": frozenset({"support:admin"})},
+    )
+    ingest_document(
+        index,
+        "other_tenant",
+        "Refund policy eligibility is unlimited.",
+        source_overrides={"tenant_id": "tenant_beta"},
+    )
+
+    result = index.retrieve(make_retrieval_request())
+
+    assert tuple(candidate.chunk_id for candidate in result.candidates) == (
+        "chunk_allowed",
+    )
+    assert index.scored_chunk_ids == ["chunk_allowed"]
+    assert result.eligible_count == 1
+
+
+def test_retrieval_filters_marketplace_locale_product_and_effective_time() -> None:
+    index = InMemoryLexicalSupportIndex()
+    text = "Refund policy eligibility applies to this product."
+    ingest_document(
+        index,
+        "exact_product",
+        text,
+        source_overrides={"product_id": "product_42"},
+    )
+    ingest_document(index, "global_product", text)
+    ingest_document(
+        index,
+        "wrong_marketplace",
+        text,
+        source_overrides={"marketplace": "shopify"},
+    )
+    ingest_document(
+        index,
+        "wrong_locale",
+        text,
+        source_overrides={"locale": "fr-FR"},
+    )
+    ingest_document(
+        index,
+        "wrong_product",
+        text,
+        source_overrides={"product_id": "product_99"},
+    )
+    ingest_document(
+        index,
+        "stale",
+        text,
+        source_overrides={
+            "effective_from": datetime(2026, 1, 1, tzinfo=UTC),
+            "effective_to": datetime(2026, 7, 12, tzinfo=UTC),
+        },
+    )
+
+    result = index.retrieve(
+        make_retrieval_request(
+            filter_overrides={"product_id": "product_42"},
+        )
+    )
+
+    assert {candidate.chunk_id for candidate in result.candidates} == {
+        "chunk_exact_product",
+        "chunk_global_product",
+    }
+    assert result.eligible_count == 2
+    assert result.stale_filtered_count == 1
+
+
+def test_retrieval_uses_postings_built_during_ingestion() -> None:
+    index = InMemoryLexicalSupportIndex()
+    ingest_document(index, "returns", "Refund policy eligibility is thirty days.")
+    build_count = index.postings_build_count
+
+    first = index.retrieve(make_retrieval_request())
+    second = index.retrieve(make_retrieval_request(trace_id="trace_002"))
+
+    assert first.candidates
+    assert second.candidates
+    assert index.postings_build_count == build_count == 1
+
+
+def test_context_dedupes_budgets_and_preserves_exact_citations() -> None:
+    first = make_candidate()
+    duplicate = make_candidate(chunk_id="chunk_duplicate", score=0.7)
+    second = make_candidate(
+        chunk_id="chunk_shipping",
+        parent_id="parent_shipping",
+        source_id="src_shipping",
+        title="Shipping SLA",
+        text="Standard delivery takes three to five business days.",
+        score=0.6,
+        locator=make_locator(
+            uri="mock://support/policies/shipping#delivery",
+            section_path=("Shipping", "Delivery"),
+        ),
+    )
+    omitted = make_candidate(
+        chunk_id="chunk_third",
+        parent_id="parent_third",
+        source_id="src_third",
+        title="Other Policy",
+        text="This block must be omitted by the chunk budget.",
+        score=0.5,
+    )
+    result = RetrievalResult(
+        trace_id="trace_001",
+        tenant_id="tenant_alpha",
+        status="ok",
+        candidates=(first, duplicate, second, omitted),
+        index_version="support-v1",
+        eligible_count=4,
+        stale_filtered_count=0,
+        failure_code=None,
+    )
+
+    context = assemble_context(result, max_chunks=2, max_chars=500)
+
+    assert len(context.blocks) == 2
+    assert context.char_count <= 500
+    assert "[1]" in context.text and "[2]" in context.text
+    assert tuple(citation.source_id for citation in context.citations) == (
+        "src_returns_v1",
+        "src_shipping",
+    )
+    assert tuple(block.candidate.locator for block in context.blocks) == tuple(
+        citation.locator for citation in context.citations
+    )
+    assert "chunk_duplicate" not in tuple(
+        block.candidate.chunk_id for block in context.blocks
+    )
+    assert "src_third" not in tuple(
+        citation.source_id for citation in context.citations
+    )
+
+
+def test_context_respects_character_budget_without_partial_evidence() -> None:
+    first = make_candidate(text="Short return policy evidence.")
+    second = make_candidate(
+        chunk_id="chunk_large",
+        parent_id="parent_large",
+        source_id="src_large",
+        title="Large Policy",
+        text="A" * 500,
+        score=0.7,
+    )
+    result = RetrievalResult(
+        trace_id="trace_001",
+        tenant_id="tenant_alpha",
+        status="ok",
+        candidates=(first, second),
+        index_version="support-v1",
+        eligible_count=2,
+        stale_filtered_count=0,
+        failure_code=None,
+    )
+
+    context = assemble_context(result, max_chunks=5, max_chars=180)
+
+    assert tuple(block.candidate.chunk_id for block in context.blocks) == (
+        "chunk_001",
+    )
+    assert context.char_count <= 180
+
+
+def test_citation_draft_matches_context_blocks_one_to_one() -> None:
+    index = InMemoryLexicalSupportIndex()
+    ingest_document(index, "returns", "Refund policy eligibility is thirty days.")
+    service = SupportRagService(
+        planner=RuleBasedSupportPlanner(),
+        retriever=index,
+    )
+
+    response = service.answer(
+        make_request(query="What is the refund policy eligibility?")
+    )
+
+    assert response.status == "draft"
+    assert len(response.citations) == 1
+    assert response.citations[0].source_id == "src_returns"
+    assert "[1]" in response.draft
+    assert response.trace.selected_count == len(response.citations)

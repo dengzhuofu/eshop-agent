@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from app.domain.support import SupportRequest, SupportResponse, SupportTraceSummary
+from app.config.models import RETRIEVAL_CONFIG
+from app.domain.support import (
+    RetrievalRequest,
+    SupportRequest,
+    SupportResponse,
+    SupportTraceSummary,
+)
+from app.rag.support.context import assemble_context
 from app.rag.support.ports import SupportPlanner, SupportRetriever
 
 
@@ -64,4 +71,55 @@ class SupportRagService:
                 trace=trace,
             )
 
-        raise RuntimeError("lexical retrieval response is not implemented")
+        result = self._retriever.retrieve(
+            RetrievalRequest(
+                trace_id=request.trace_id,
+                tenant_id=request.tenant_id,
+                query=request.query,
+                filters=decision.filters,
+                top_k=RETRIEVAL_CONFIG["initial_top_k"],
+                score_threshold=RETRIEVAL_CONFIG["score_threshold"],
+            )
+        )
+        context = assemble_context(result, max_chunks=5, max_chars=4000)
+        response_trace = SupportTraceSummary(
+            trace_id=request.trace_id,
+            tenant_id=request.tenant_id,
+            route=decision.route,
+            index_version=result.index_version,
+            eligible_count=result.eligible_count,
+            candidate_count=len(result.candidates),
+            selected_count=len(context.blocks),
+            source_ids=tuple(block.candidate.source_id for block in context.blocks),
+            scores=tuple(block.candidate.score for block in context.blocks),
+            decision="draft" if context.blocks else "insufficient_evidence",
+            error_categories=(result.failure_code,) if result.failure_code else (),
+        )
+        if not context.blocks:
+            return SupportResponse(
+                trace_id=request.trace_id,
+                tenant_id=request.tenant_id,
+                status="insufficient_evidence",
+                draft="Available evidence is insufficient; human review is required.",
+                citations=(),
+                transaction_request=None,
+                requires_human_review=True,
+                reason_code="insufficient_evidence",
+                trace=response_trace,
+            )
+
+        draft = "\n".join(
+            f"{block.candidate.text} [{block.citation_number}]"
+            for block in context.blocks
+        )
+        return SupportResponse(
+            trace_id=request.trace_id,
+            tenant_id=request.tenant_id,
+            status="draft",
+            draft=draft,
+            citations=context.citations,
+            transaction_request=None,
+            requires_human_review=False,
+            reason_code="grounded_draft",
+            trace=response_trace,
+        )

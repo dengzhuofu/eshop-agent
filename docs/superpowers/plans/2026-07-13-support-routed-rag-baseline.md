@@ -200,10 +200,10 @@ Expected: collection FAIL because contracts are absent.
 
 **Files:** Modify lexical; create context; modify test.
 
-- [ ] **Step 1: Write RED tests** proving tenant/ACL filters run before scoring, filters include marketplace/locale/product/effective time, index is built at ingestion rather than per request, context dedupes/budgets/preserves locators and citations exactly match used blocks.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "retrieval or context or citation" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. Maintain inverted postings during ingestion. Filter allowed chunk IDs before lexical scoring. Assemble at most 5 chunks/4000 chars, dedupe by source/parent/text hash, render `[n]` evidence blocks and one-to-one citations.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加 ACL 词法检索与引用上下文`.
+- [x] **Step 1: Write RED tests** proving tenant/ACL filters run before scoring, filters include marketplace/locale/product/effective time, index is built at ingestion rather than per request, context dedupes/budgets/preserves locators and citations exactly match used blocks.
+- [x] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "retrieval or context or citation" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. Maintain inverted postings during ingestion. Filter allowed chunk IDs before lexical scoring. Assemble at most 5 chunks/4000 chars, dedupe by source/parent/text hash, render `[n]` evidence blocks and one-to-one citations.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加 ACL 词法检索与引用上下文`.
 
 ### Task 5: No-Answer, Stale, Injection And Failure Handling
 

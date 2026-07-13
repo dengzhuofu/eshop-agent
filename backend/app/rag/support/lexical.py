@@ -1,9 +1,38 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Sequence
 
-from app.domain.support import IngestionResult, SupportChunk, SupportSource
+from app.domain.support import (
+    IngestionResult,
+    RetrievalCandidate,
+    RetrievalRequest,
+    RetrievalResult,
+    SupportChunk,
+    SupportSource,
+)
+
+
+_TOKEN_PATTERN = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "and",
+        "are",
+        "does",
+        "for",
+        "is",
+        "my",
+        "of",
+        "the",
+        "this",
+        "to",
+        "what",
+        "within",
+        "your",
+    }
+)
 
 
 class InMemoryLexicalSupportIndex:
@@ -12,6 +41,9 @@ class InMemoryLexicalSupportIndex:
         self._chunks: dict[tuple[str, str], SupportChunk] = {}
         self._source_chunks: dict[tuple[str, str], set[str]] = {}
         self._tombstoned_chunks: set[tuple[str, str]] = set()
+        self._chunk_tokens: dict[tuple[str, str], frozenset[str]] = {}
+        self._postings: dict[str, set[tuple[str, str]]] = {}
+        self._postings_build_count = 0
 
     def ingest(
         self, source: SupportSource, chunks: Sequence[SupportChunk]
@@ -45,16 +77,20 @@ class InMemoryLexicalSupportIndex:
 
         # 整批元数据与哈希已校验后才修改索引，失败版本不会留下半替换状态。
         for chunk_id in old_chunk_ids:
+            self._remove_postings((source.tenant_id, chunk_id))
             self._chunks.pop((source.tenant_id, chunk_id), None)
         self._tombstoned_chunks.update(
             (source.tenant_id, chunk_id) for chunk_id in old_chunk_ids - new_chunk_ids
         )
         for chunk in prepared_chunks:
-            self._chunks[(source.tenant_id, chunk.chunk_id)] = chunk
-            self._tombstoned_chunks.discard((source.tenant_id, chunk.chunk_id))
+            chunk_key = (source.tenant_id, chunk.chunk_id)
+            self._chunks[chunk_key] = chunk
+            self._add_postings(chunk_key, chunk)
+            self._tombstoned_chunks.discard(chunk_key)
 
         self._sources[key] = source
         self._source_chunks[key] = new_chunk_ids
+        self._postings_build_count += 1
         return self._result(
             source,
             status="ingested",
@@ -78,6 +114,7 @@ class InMemoryLexicalSupportIndex:
 
         chunk_ids = self._source_chunks.pop(key, set())
         for chunk_id in chunk_ids:
+            self._remove_postings((tenant_id, chunk_id))
             self._chunks.pop((tenant_id, chunk_id), None)
             self._tombstoned_chunks.add((tenant_id, chunk_id))
         self._sources[key] = source.model_copy(update={"status": "tombstoned"})
@@ -91,6 +128,121 @@ class InMemoryLexicalSupportIndex:
 
     def is_chunk_tombstoned(self, tenant_id: str, chunk_id: str) -> bool:
         return (tenant_id, chunk_id) in self._tombstoned_chunks
+
+    @property
+    def postings_build_count(self) -> int:
+        return self._postings_build_count
+
+    def retrieve(self, request: RetrievalRequest) -> RetrievalResult:
+        query_tokens = self._tokenize(request.query)
+        eligible_keys: set[tuple[str, str]] = set()
+        stale_filtered_count = 0
+
+        # tenant/ACL/业务元数据先生成允许集合，评分器只能接触集合内的 chunk 文本。
+        for chunk_key, chunk in self._chunks.items():
+            if chunk.tenant_id != request.tenant_id:
+                continue
+            if not chunk.permission_scopes.issubset(
+                request.filters.actor_permission_scopes
+            ):
+                continue
+            if chunk.marketplace not in (None, request.filters.marketplace):
+                continue
+            if chunk.locale != request.filters.locale:
+                continue
+            if chunk.product_id not in (None, request.filters.product_id):
+                continue
+            if (
+                chunk.effective_from is not None
+                and chunk.effective_from > request.filters.effective_at
+            ) or (
+                chunk.effective_to is not None
+                and chunk.effective_to < request.filters.effective_at
+            ):
+                stale_filtered_count += 1
+                continue
+            eligible_keys.add(chunk_key)
+
+        posting_keys: set[tuple[str, str]] = set()
+        for token in query_tokens:
+            posting_keys.update(self._postings.get(token, set()))
+
+        scored: list[tuple[float, SupportChunk]] = []
+        for chunk_key in sorted(posting_keys & eligible_keys):
+            chunk = self._chunks[chunk_key]
+            score = self._score_chunk(query_tokens, chunk)
+            if score >= request.score_threshold:
+                scored.append((score, chunk))
+        scored.sort(key=lambda item: (-item[0], item[1].chunk_id))
+
+        candidates: list[RetrievalCandidate] = []
+        for score, chunk in scored[: request.top_k]:
+            source = self._sources[(chunk.tenant_id, chunk.source_id)]
+            candidates.append(
+                RetrievalCandidate(
+                    chunk_id=chunk.chunk_id,
+                    parent_id=chunk.parent_id,
+                    source_id=chunk.source_id,
+                    tenant_id=chunk.tenant_id,
+                    title=source.title,
+                    text=chunk.text,
+                    score=score,
+                    content_hash=chunk.content_hash,
+                    index_version=chunk.index_version,
+                    policy_version=chunk.policy_version,
+                    authority=chunk.authority,
+                    locator=chunk.locator,
+                )
+            )
+
+        tenant_versions = {
+            source.index_version
+            for (tenant_id, _), source in self._sources.items()
+            if tenant_id == request.tenant_id and source.status == "active"
+        }
+        return RetrievalResult(
+            trace_id=request.trace_id,
+            tenant_id=request.tenant_id,
+            status="ok",
+            candidates=tuple(candidates),
+            index_version=max(tenant_versions, default="unavailable"),
+            eligible_count=len(eligible_keys),
+            stale_filtered_count=stale_filtered_count,
+            failure_code=None,
+        )
+
+    def _score_chunk(
+        self, query_tokens: frozenset[str], chunk: SupportChunk
+    ) -> float:
+        if not query_tokens:
+            return 0.0
+        overlap = query_tokens.intersection(self._chunk_tokens[(chunk.tenant_id, chunk.chunk_id)])
+        return len(overlap) / len(query_tokens)
+
+    @staticmethod
+    def _tokenize(text: str) -> frozenset[str]:
+        return frozenset(
+            token
+            for token in (match.casefold() for match in _TOKEN_PATTERN.findall(text))
+            if token not in _STOP_WORDS
+        )
+
+    def _add_postings(
+        self, chunk_key: tuple[str, str], chunk: SupportChunk
+    ) -> None:
+        tokens = self._tokenize(chunk.text)
+        self._chunk_tokens[chunk_key] = tokens
+        for token in tokens:
+            self._postings.setdefault(token, set()).add(chunk_key)
+
+    def _remove_postings(self, chunk_key: tuple[str, str]) -> None:
+        for token in self._chunk_tokens.pop(chunk_key, frozenset()):
+            keys = self._postings.get(token)
+            if keys is None:
+                continue
+            keys.discard(chunk_key)
+            if not keys:
+                self._postings.pop(token, None)
 
     def _validate_batch(
         self, source: SupportSource, chunks: tuple[SupportChunk, ...]
