@@ -142,6 +142,6 @@ Expected: all tests pass.
 
 Ask a reviewer subagent to inspect Node 15 against this plan, ADR 0002, and the diff.
 
-- [ ] **Step 4: Commit, push, merge to main**
+- [x] **Step 4: Commit, push, merge to main**
 
 Commit the branch, push it, fast-forward or merge into `main`, run full backend suite again on `main`, and push `main`.
