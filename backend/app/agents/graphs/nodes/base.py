@@ -45,10 +45,22 @@ def get_node_contracts() -> list[NodeContract]:
             },
         ),
         NodeContract(
-            name="listing_draft",
+            name="listing_validation",
             owner_agent=AgentRole.LISTING,
             side_effect=NodeSideEffect.DETERMINISTIC,
-            output_keys={"messages", "tool_calls"},
+            output_keys={"listing_validations", "tool_calls"},
+        ),
+        NodeContract(
+            name="localization",
+            owner_agent=AgentRole.LOCALIZATION,
+            side_effect=NodeSideEffect.DETERMINISTIC,
+            output_keys={
+                "listing_drafts",
+                "localized_listings",
+                "localization_risk_flags",
+                "tool_calls",
+                "evidence",
+            },
         ),
         NodeContract(
             name="risk_review",

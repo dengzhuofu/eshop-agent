@@ -60,6 +60,7 @@ def profit_analysis_node(state: CommerceAgentState) -> dict:
             *state["tool_calls"],
             {
                 "tool": "estimate_profit",
+                "agent_role": AgentRole.PROFIT_ANALYST.value,
                 "risk_level": RiskLevel.LOW.value,
                 "status": "completed",
             },
@@ -131,6 +132,7 @@ def supplier_evaluation_node(state: CommerceAgentState) -> dict:
             *[
                 {
                     "tool": "score_supplier",
+                    "agent_role": AgentRole.SUPPLIER.value,
                     "supplier_id": score.supplier_id,
                     "risk_level": RiskLevel.LOW.value,
                     "status": "completed",
@@ -171,13 +173,137 @@ def _draft_for_marketplace(marketplace: Marketplace, state: CommerceAgentState) 
     )
 
 
+def _drafts_for_state(state: CommerceAgentState) -> list[ListingDraft]:
+    localized = state.get("localized_listings", [])
+    if localized:
+        return [ListingDraft.model_validate(item["draft"]) for item in localized if "draft" in item]
+
+    stored_drafts = state.get("listing_drafts", [])
+    if stored_drafts:
+        return [ListingDraft.model_validate(item) for item in stored_drafts]
+
+    return [
+        _draft_for_marketplace(Marketplace(marketplace_value), state)
+        for marketplace_value in state["target_marketplaces"]
+    ]
+
+
+def _localized_draft(
+    draft: ListingDraft,
+    locale: str,
+    risk_preference: str,
+) -> tuple[ListingDraft, list[str], list[dict]]:
+    attributes = dict(draft.attributes)
+    changes = ["locale"]
+    risk_flags: list[dict] = []
+    title = draft.title
+    description = draft.description
+    bullet_points = [*draft.bullet_points]
+
+    if locale == "en-GB":
+        attributes["unit_style"] = "metric"
+        attributes["market_wording"] = "UK English"
+        changes.extend(["unit_style", "market_wording"])
+    elif locale == "en-US":
+        attributes["unit_style"] = "imperial"
+        attributes["market_wording"] = "US English"
+        changes.extend(["unit_style", "market_wording"])
+    else:
+        attributes["market_wording"] = "international English"
+        changes.append("market_wording")
+
+    if risk_preference == "localization_risk":
+        description = f"{description} Guaranteed perfect results for every home."
+        changes.append("claim_review")
+        risk_flags.append(
+            {
+                "marketplace": draft.marketplace.value,
+                "locale": locale,
+                "field": "description",
+                "message": "Localized copy contains an unsupported guaranteed-results claim.",
+                "risk_level": RiskLevel.HIGH.value,
+            }
+        )
+
+    return (
+        draft.model_copy(
+            update={
+                "title": title,
+                "description": description,
+                "bullet_points": bullet_points,
+                "attributes": attributes,
+                "locale": locale,
+            }
+        ),
+        changes,
+        risk_flags,
+    )
+
+
+def localization_node(state: CommerceAgentState) -> dict:
+    locale = state["target_locale"]
+    listing_drafts = [
+        _draft_for_marketplace(Marketplace(marketplace_value), state)
+        for marketplace_value in state["target_marketplaces"]
+    ]
+    localized_listings = []
+    localization_risk_flags = []
+    tool_calls = [*state["tool_calls"]]
+
+    for draft in listing_drafts:
+        localized_draft, changes, risk_flags = _localized_draft(
+            draft,
+            locale,
+            state["risk_preference"],
+        )
+        localization_risk_flags.extend(risk_flags)
+        localized_listings.append(
+            {
+                "marketplace": draft.marketplace.value,
+                "source_sku": draft.sku,
+                "locale": locale,
+                "changes": changes,
+                "risk_flags": risk_flags,
+                "draft": localized_draft.model_dump(mode="json"),
+            }
+        )
+        tool_calls.append(
+            {
+                "tool": "localize_listing",
+                "agent_role": AgentRole.LOCALIZATION.value,
+                "marketplace": draft.marketplace.value,
+                "locale": locale,
+                "risk_level": RiskLevel.MEDIUM.value,
+                "status": "completed",
+            }
+        )
+
+    return {
+        "current_agent": AgentRole.LOCALIZATION,
+        "current_step": WorkflowState.LOCALIZING,
+        "completed_steps": _append_step(state, "localization"),
+        "listing_drafts": [draft.model_dump(mode="json") for draft in listing_drafts],
+        "localized_listings": localized_listings,
+        "localization_risk_flags": localization_risk_flags,
+        "tool_calls": tool_calls,
+        "evidence": [
+            *state["evidence"],
+            {
+                "source": "mock_localization_rules",
+                "summary": f"Localized {len(localized_listings)} listing drafts for {locale}.",
+                "confidence": 0.84,
+            },
+        ],
+    }
+
+
 def listing_validation_node(state: CommerceAgentState) -> dict:
     validations = []
     tool_calls = [*state["tool_calls"]]
-    for marketplace_value in state["target_marketplaces"]:
-        marketplace = Marketplace(marketplace_value)
+    for draft in _drafts_for_state(state):
+        marketplace = draft.marketplace
         adapter = get_mock_adapter(marketplace)
-        validation = adapter.validate_listing(_draft_for_marketplace(marketplace, state))
+        validation = adapter.validate_listing(draft)
         validations.append(
             {
                 "marketplace": marketplace.value,
@@ -188,6 +314,7 @@ def listing_validation_node(state: CommerceAgentState) -> dict:
         tool_calls.append(
             {
                 "tool": "validate_listing",
+                "agent_role": AgentRole.LISTING.value,
                 "marketplace": marketplace.value,
                 "risk_level": RiskLevel.LOW.value,
                 "status": "completed",
@@ -207,10 +334,20 @@ def risk_review_node(state: CommerceAgentState) -> dict:
     has_invalid_listing = any(not item["valid"] for item in state["listing_validations"])
     profit_risk = state["profit_estimate"].get("profit_risk")
     supplier_risk = state["supplier_risk_level"] == "high"
-    risk_level = RiskLevel.HIGH if has_invalid_listing or profit_risk == "high" or supplier_risk else RiskLevel.MEDIUM
+    localization_risk = any(
+        flag.get("risk_level") in {RiskLevel.HIGH.value, RiskLevel.CRITICAL.value}
+        for flag in state["localization_risk_flags"]
+    )
+    risk_level = (
+        RiskLevel.HIGH
+        if has_invalid_listing or profit_risk == "high" or supplier_risk or localization_risk
+        else RiskLevel.MEDIUM
+    )
     approval_reasons = ["publish_listing"]
     if supplier_risk:
         approval_reasons.append("supplier_risk")
+    if localization_risk:
+        approval_reasons.append("localization_risk")
     return {
         "current_agent": AgentRole.RISK_REVIEW,
         "current_step": WorkflowState.REVIEWING_RISK,
@@ -306,17 +443,29 @@ def publish_listing_node(state: CommerceAgentState) -> dict:
 
     publish_results = []
     tool_calls = [*state["tool_calls"]]
-    for marketplace_value in state["target_marketplaces"]:
-        marketplace = Marketplace(marketplace_value)
+    for draft in _drafts_for_state(state):
+        marketplace = draft.marketplace
         adapter = get_mock_adapter(marketplace)
-        result = adapter.publish_listing(
-            _draft_for_marketplace(marketplace, state),
-            idempotency_key=f"{approval.id}:{marketplace.value}",
-        )
+        try:
+            result = adapter.publish_listing(
+                draft,
+                idempotency_key=f"{approval.id}:{marketplace.value}",
+            )
+        except ValueError as exc:
+            return {
+                "current_agent": AgentRole.SUPERVISOR,
+                "current_step": WorkflowState.FAILED,
+                "completed_steps": _append_step(state, "publish_listing"),
+                "errors": [*state["errors"], str(exc)],
+                "approval_request": approval.model_dump(mode="json"),
+                "publish_results": publish_results,
+                "tool_calls": tool_calls,
+            }
         publish_results.append(result.model_dump(mode="json"))
         tool_calls.append(
             {
                 "tool": "publish_listing",
+                "agent_role": AgentRole.SUPERVISOR.value,
                 "marketplace": marketplace.value,
                 "risk_level": RiskLevel.HIGH.value,
                 "status": "completed",

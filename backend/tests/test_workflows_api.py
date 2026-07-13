@@ -9,6 +9,7 @@ from app.repositories.snapshots import get_workflow_snapshot_repository
 WORKFLOW_REQUEST = {
     "product_idea": "foldable under-bed storage organizer",
     "target_marketplaces": ["amazon", "shopify", "tiktok_shop"],
+    "target_locale": "en-GB",
     "target_price": 29.99,
     "risk_preference": "balanced",
 }
@@ -40,6 +41,7 @@ def test_create_workflow_returns_deterministic_preview():
     data = response.json()
     assert data["workflow_id"].startswith("wf_")
     assert data["state"] == "awaiting_approval"
+    assert data["target_locale"] == "en-GB"
     assert data["approval_required"] is True
     assert data["approval_request_id"].startswith("appr_")
     assert data["approval_request"]["status"] == "pending"
@@ -48,6 +50,10 @@ def test_create_workflow_returns_deterministic_preview():
     assert data["selected_supplier_id"] == "SUP-1"
     assert data["supplier_risk_level"] == "low"
     assert len(data["supplier_evaluations"]) >= 2
+    assert len(data["localized_listings"]) == 3
+    assert all(item["locale"] == "en-GB" for item in data["localized_listings"])
+    assert any("unit_style" in item["changes"] for item in data["localized_listings"])
+    assert data["localization_risk_flags"] == []
     assert len(data["listing_validations"]) == 3
     assert {item["marketplace"] for item in data["listing_validations"]} == {
         "amazon",
@@ -84,8 +90,31 @@ def test_workflow_resume_publishes_after_approval():
     data = resumed.json()
     assert data["state"] == "completed"
     assert data["approval_request_id"] == approval_id
+    assert data["target_locale"] == "en-GB"
+    assert len(data["listing_drafts"]) == 3
+    assert len(data["localized_listings"]) == 3
+    assert data["localization_risk_flags"] == []
     assert len(data["publish_results"]) == 3
     assert all(item["status"] == "published" for item in data["publish_results"])
+
+
+def test_workflow_resume_returns_409_when_localized_listing_is_invalid():
+    get_approval_repository().clear()
+    get_workflow_snapshot_repository().clear()
+    client = TestClient(create_app())
+    request = {
+        **WORKFLOW_REQUEST,
+        "risk_preference": "localization_risk",
+    }
+    response = client.post("/workflows", json=request)
+    approval_id = response.json()["approval_request_id"]
+    workflow_id = response.json()["workflow_id"]
+    client.post(f"/approvals/{approval_id}/approve", json={"reviewer_id": "ops-lead"})
+
+    resumed = client.post(f"/workflows/{workflow_id}/resume", json={"approval_request_id": approval_id})
+
+    assert resumed.status_code == 409
+    assert "Cannot publish invalid listing: claims" in resumed.json()["detail"]
 
 
 def test_workflow_resume_returns_409_when_approval_not_approved():

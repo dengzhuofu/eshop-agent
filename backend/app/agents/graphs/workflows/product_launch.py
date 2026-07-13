@@ -5,6 +5,7 @@ from app.agents.graphs.nodes.product_launch import (
     await_approval_node,
     complete_node,
     listing_validation_node,
+    localization_node,
     publish_listing_node,
     product_research_node,
     profit_analysis_node,
@@ -22,6 +23,7 @@ STEP_AGENT_ROLES = {
     "product_research": AgentRole.PRODUCT_RESEARCH,
     "profit_analysis": AgentRole.PROFIT_ANALYST,
     "supplier_evaluation": AgentRole.SUPPLIER,
+    "localization": AgentRole.LOCALIZATION,
     "listing_validation": AgentRole.LISTING,
     "risk_review": AgentRole.RISK_REVIEW,
     "await_approval": AgentRole.SUPERVISOR,
@@ -35,6 +37,7 @@ def build_product_launch_graph():
     graph.add_node("product_research", product_research_node)
     graph.add_node("profit_analysis", profit_analysis_node)
     graph.add_node("supplier_evaluation", supplier_evaluation_node)
+    graph.add_node("localization", localization_node)
     graph.add_node("listing_validation", listing_validation_node)
     graph.add_node("risk_review", risk_review_node)
     graph.add_node("await_approval", await_approval_node)
@@ -43,7 +46,8 @@ def build_product_launch_graph():
     graph.add_edge(START, "product_research")
     graph.add_edge("product_research", "profit_analysis")
     graph.add_edge("profit_analysis", "supplier_evaluation")
-    graph.add_edge("supplier_evaluation", "listing_validation")
+    graph.add_edge("supplier_evaluation", "localization")
+    graph.add_edge("localization", "listing_validation")
     graph.add_edge("listing_validation", "risk_review")
     graph.add_conditional_edges(
         "risk_review",
@@ -66,6 +70,20 @@ def build_product_launch_publish_graph():
     return graph.compile()
 
 
+def _step_event_metadata(state: CommerceAgentState, step: str) -> dict:
+    metadata = {"current_step": str(state["current_step"])}
+    if step == "localization":
+        metadata.update(
+            {
+                "target_locale": state["target_locale"],
+                "localized_listing_count": len(state["localized_listings"]),
+                "localization_risk_count": len(state["localization_risk_flags"]),
+                "marketplaces": [item["marketplace"] for item in state["localized_listings"]],
+            }
+        )
+    return metadata
+
+
 def _record_completed_step_events(state: CommerceAgentState, steps: list[str] | None = None) -> None:
     selected_steps = steps or state["completed_steps"]
     repo = get_trace_event_repository()
@@ -77,7 +95,7 @@ def _record_completed_step_events(state: CommerceAgentState, steps: list[str] | 
                 agent_role=STEP_AGENT_ROLES.get(step, state["current_agent"]),
                 event_type=TraceEventType.NODE_END,
                 name=step,
-                metadata={"current_step": str(state["current_step"])},
+                metadata=_step_event_metadata(state, step),
             )
         )
 
@@ -91,7 +109,7 @@ def _record_tool_call_events(state: CommerceAgentState, only_tool: str | None = 
             create_trace_event(
                 workflow_id=state["workflow_id"],
                 tenant_id=state["tenant_id"],
-                agent_role=state["current_agent"],
+                agent_role=AgentRole(tool_call.get("agent_role", state["current_agent"])),
                 event_type=TraceEventType.TOOL_CALL,
                 name=str(tool_call.get("tool")),
                 metadata=tool_call,
@@ -148,6 +166,7 @@ def run_product_launch_preview(
     target_marketplaces: list[Marketplace],
     target_price: float,
     risk_preference: str,
+    target_locale: str = "en-US",
 ) -> CommerceAgentState:
     initial_state = create_initial_state(
         workflow_id=workflow_id,
@@ -155,6 +174,7 @@ def run_product_launch_preview(
         current_agent=AgentRole.SUPERVISOR,
         product_idea=product_idea,
         target_marketplaces=[marketplace.value for marketplace in target_marketplaces],
+        target_locale=target_locale,
         target_price=target_price,
         risk_preference=risk_preference,
     )

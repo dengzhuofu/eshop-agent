@@ -10,6 +10,7 @@ class CommerceAgentState(TypedDict):
     current_step: str
     product_idea: str
     target_marketplaces: list[str]
+    target_locale: str
     target_price: float
     risk_preference: str
     messages: list[dict[str, Any]]
@@ -24,6 +25,9 @@ class CommerceAgentState(TypedDict):
     supplier_evaluations: list[dict[str, Any]]
     selected_supplier_id: str | None
     supplier_risk_level: str
+    listing_drafts: list[dict[str, Any]]
+    localized_listings: list[dict[str, Any]]
+    localization_risk_flags: list[dict[str, Any]]
     listing_validations: list[dict[str, Any]]
     publish_results: list[dict[str, Any]]
     completed_steps: list[str]
@@ -36,6 +40,7 @@ def create_initial_state(
     current_agent: AgentRole,
     product_idea: str = "",
     target_marketplaces: list[str] | None = None,
+    target_locale: str = "en-US",
     target_price: float = 0,
     risk_preference: str = "balanced",
 ) -> CommerceAgentState:
@@ -46,6 +51,7 @@ def create_initial_state(
         "current_step": "queued",
         "product_idea": product_idea,
         "target_marketplaces": target_marketplaces or [],
+        "target_locale": target_locale,
         "target_price": target_price,
         "risk_preference": risk_preference,
         "messages": [],
@@ -60,6 +66,9 @@ def create_initial_state(
         "supplier_evaluations": [],
         "selected_supplier_id": None,
         "supplier_risk_level": "unknown",
+        "listing_drafts": [],
+        "localized_listings": [],
+        "localization_risk_flags": [],
         "listing_validations": [],
         "publish_results": [],
         "completed_steps": [],

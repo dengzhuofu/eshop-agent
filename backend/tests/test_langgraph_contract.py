@@ -20,6 +20,10 @@ def test_initial_langgraph_state_contains_required_agent_fields():
     assert state["tool_calls"] == []
     assert state["approval_required"] is False
     assert state["risk_level"] == RiskLevel.LOW
+    assert state["target_locale"] == "en-US"
+    assert state["listing_drafts"] == []
+    assert state["localized_listings"] == []
+    assert state["localization_risk_flags"] == []
 
 
 def test_node_contracts_separate_read_only_and_approval_gated_nodes():
@@ -27,12 +31,23 @@ def test_node_contracts_separate_read_only_and_approval_gated_nodes():
 
     assert contracts["product_research"].side_effect == NodeSideEffect.READ_ONLY
     assert contracts["profit_analysis"].side_effect == NodeSideEffect.DETERMINISTIC
+    assert contracts["listing_validation"].owner_agent == AgentRole.LISTING
+    assert {"listing_validations", "tool_calls"}.issubset(contracts["listing_validation"].output_keys)
     assert contracts["publish_listing"].side_effect == NodeSideEffect.APPROVAL_GATED
     assert {
         "supplier_evaluations",
         "selected_supplier_id",
         "supplier_risk_level",
     }.issubset(contracts["supplier_evaluation"].output_keys)
+    assert contracts["localization"].owner_agent == AgentRole.LOCALIZATION
+    assert contracts["localization"].side_effect == NodeSideEffect.DETERMINISTIC
+    assert {
+        "listing_drafts",
+        "localized_listings",
+        "localization_risk_flags",
+        "tool_calls",
+        "evidence",
+    }.issubset(contracts["localization"].output_keys)
 
 
 def test_approval_route_does_not_execute_side_effects():

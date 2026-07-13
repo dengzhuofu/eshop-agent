@@ -18,6 +18,7 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 class WorkflowCreateRequest(BaseModel):
     product_idea: str = Field(min_length=1)
     target_marketplaces: list[Marketplace]
+    target_locale: str = "en-US"
     target_price: float = Field(gt=0)
     risk_preference: str = "balanced"
 
@@ -30,6 +31,7 @@ def _workflow_id(request: WorkflowCreateRequest) -> str:
     raw = (
         f"{request.product_idea}:"
         f"{','.join(m.value for m in request.target_marketplaces)}:"
+        f"{request.target_locale}:"
         f"{request.target_price}:"
         f"{request.risk_preference}"
     )
@@ -44,6 +46,7 @@ def create_workflow(request: WorkflowCreateRequest) -> dict:
         tenant_id="demo-tenant",
         product_idea=request.product_idea,
         target_marketplaces=request.target_marketplaces,
+        target_locale=request.target_locale,
         target_price=request.target_price,
         risk_preference=request.risk_preference,
     )
@@ -54,10 +57,14 @@ def create_workflow(request: WorkflowCreateRequest) -> dict:
         "state": WorkflowState(state["current_step"]).value,
         "product_idea": request.product_idea,
         "target_marketplaces": [marketplace.value for marketplace in request.target_marketplaces],
+        "target_locale": state["target_locale"],
         "profit_estimate": state["profit_estimate"],
         "supplier_evaluations": state["supplier_evaluations"],
         "selected_supplier_id": state["selected_supplier_id"],
         "supplier_risk_level": state["supplier_risk_level"],
+        "listing_drafts": state["listing_drafts"],
+        "localized_listings": state["localized_listings"],
+        "localization_risk_flags": state["localization_risk_flags"],
         "listing_validations": state["listing_validations"],
         "approval_required": state["approval_required"],
         "approval_request_id": state["approval_request_id"],
@@ -92,6 +99,10 @@ def resume_workflow(workflow_id: str, request: WorkflowResumeRequest) -> dict:
         "state": WorkflowState(state["current_step"]).value,
         "approval_request_id": state["approval_request_id"],
         "publish_results": state["publish_results"],
+        "target_locale": state["target_locale"],
+        "listing_drafts": state["listing_drafts"],
+        "localized_listings": state["localized_listings"],
+        "localization_risk_flags": state["localization_risk_flags"],
         "tool_calls": state["tool_calls"],
         "completed_steps": state["completed_steps"],
     }
