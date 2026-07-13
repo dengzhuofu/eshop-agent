@@ -191,10 +191,10 @@ Expected: collection FAIL because contracts are absent.
 
 **Files:** Create planner/service; modify test.
 
-- [ ] **Step 1: Write RED parameterized tests** for order status, shipment trajectory, payment status, refund amount, inventory, coupon and ticket history as transaction routes; refund policy/shipping SLA as RAG; off-topic refusal; legal threat escalation; non-RAG routes must not invoke retriever.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "planner or transaction or off_topic" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN**. `RuleBasedSupportPlanner.plan()` only creates intent/route/filter/reason. `refund policy` must not match the `refund amount` route. Transaction route returns `requires_transaction_tool` without reading the tool registry.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加客服问题确定性路由`.
+- [x] **Step 1: Write RED parameterized tests** for order status, shipment trajectory, payment status, refund amount, inventory, coupon and ticket history as transaction routes; refund policy/shipping SLA as RAG; off-topic refusal; legal threat escalation; non-RAG routes must not invoke retriever.
+- [x] **Step 2: Verify RED** with `pytest tests/test_support_rag.py -k "planner or transaction or off_topic" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN**. `RuleBasedSupportPlanner.plan()` only creates intent/route/filter/reason. `refund policy` must not match the `refund amount` route. Transaction route returns `requires_transaction_tool` without reading the tool registry.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加客服问题确定性路由`.
 
 ### Task 4: ACL-Prefiltered Lexical Retrieval And Citations
 

@@ -16,6 +16,8 @@ from app.domain.support import (
     SupportTraceSummary,
 )
 from app.rag.support.lexical import InMemoryLexicalSupportIndex
+from app.rag.support.planner import RuleBasedSupportPlanner
+from app.rag.support.service import SupportRagService
 
 
 NOW = datetime(2026, 7, 13, 8, 0, tzinfo=UTC)
@@ -325,3 +327,88 @@ def test_ingestion_rejects_weaker_acl_and_chunk_hash_mismatch(
     assert result.status == "failed"
     assert result.failure_code == failure_code
     assert result.active_chunk_count == 0
+
+
+@pytest.mark.parametrize(
+    ("query", "intent", "tool_name"),
+    [
+        ("What is the status of order A-100?", "order_status", "get_order_status"),
+        ("Show the shipment tracking trajectory", "shipment_trajectory", "get_shipment_trajectory"),
+        ("Did my payment go through?", "payment_status", "get_payment_status"),
+        ("How much money was refunded?", "refund_amount", "get_refund_amount"),
+        ("Is SKU-42 currently in stock?", "inventory_status", "get_inventory_status"),
+        ("Is coupon SAVE20 still valid?", "coupon_status", "get_coupon_status"),
+        ("Show my previous support ticket history", "ticket_history", "get_ticket_history"),
+    ],
+)
+def test_planner_routes_transaction_facts_to_declared_tool_request(
+    query: str, intent: str, tool_name: str
+) -> None:
+    decision = RuleBasedSupportPlanner().plan(make_request(query=query))
+
+    assert decision.intent == intent
+    assert decision.route == "requires_transaction_tool"
+    assert decision.transaction_request is not None
+    assert decision.transaction_request.tool_name == tool_name
+    assert decision.filters.tenant_id == "tenant_alpha"
+    assert decision.filters.actor_permission_scopes == frozenset({"support:policy"})
+
+
+@pytest.mark.parametrize(
+    ("query", "intent"),
+    [
+        ("What is your refund policy and eligibility window?", "refund_policy"),
+        ("What shipping SLA applies to Amazon orders?", "shipping_sla"),
+    ],
+)
+def test_planner_routes_static_policy_to_lexical_rag(query: str, intent: str) -> None:
+    decision = RuleBasedSupportPlanner().plan(make_request(query=query))
+
+    assert decision.intent == intent
+    assert decision.route == "lexical_retrieval"
+    assert decision.transaction_request is None
+    assert decision.filters.marketplace == "amazon"
+    assert decision.filters.locale == "en-US"
+    assert decision.filters.effective_at == NOW
+
+
+def test_planner_does_not_confuse_refund_policy_with_refund_amount() -> None:
+    decision = RuleBasedSupportPlanner().plan(
+        make_request(query="Does the refund policy cover the full purchase amount?")
+    )
+
+    assert decision.intent == "refund_policy"
+    assert decision.route == "lexical_retrieval"
+    assert decision.transaction_request is None
+
+
+@pytest.mark.parametrize(
+    ("query", "status", "reason_code"),
+    [
+        ("Tell me tomorrow's weather", "off_topic", "off_topic"),
+        ("I will sue your company and contact my attorney", "escalated", "legal_threat"),
+        ("What is the status of order A-100?", "requires_transaction_tool", "transaction_tool_required"),
+    ],
+)
+def test_planner_non_rag_routes_do_not_invoke_retriever(
+    query: str, status: str, reason_code: str
+) -> None:
+    class NeverRetriever:
+        calls = 0
+
+        def retrieve(self, request: object) -> object:
+            self.calls += 1
+            raise AssertionError("non-RAG route must not invoke retrieval")
+
+    retriever = NeverRetriever()
+    service = SupportRagService(
+        planner=RuleBasedSupportPlanner(),
+        retriever=retriever,
+    )
+
+    response = service.answer(make_request(query=query))
+
+    assert response.status == status
+    assert response.reason_code == reason_code
+    assert response.citations == ()
+    assert retriever.calls == 0
