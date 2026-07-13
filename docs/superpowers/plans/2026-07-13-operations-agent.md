@@ -102,8 +102,8 @@ MetricEvent: metric_name, value, window_start, window_end
 
 **Files:** Create domain/test.
 
-- [ ] **Step 1: Write RED tests** `test_operations_models_require_aware_timestamps_and_version_hash` and `test_action_proposal_is_non_executable`.
-- [ ] **Step 2: Verify RED**:
+- [x] **Step 1: Write RED tests** `test_operations_models_require_aware_timestamps_and_version_hash` and `test_action_proposal_is_non_executable`.
+- [x] **Step 2: Verify RED**:
 
 ```powershell
 & 'C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pytest tests/test_operations_agent.py -k "operations_models or action_proposal" -v
@@ -111,8 +111,8 @@ MetricEvent: metric_name, value, window_start, window_end
 
 Expected: collection FAIL because domain module is absent.
 
-- [ ] **Step 3: Implement GREEN** with strict models, discriminated union, `Literal["proposed"]`, `Literal[False]` and explicit failure models.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加运营读模型领域契约`.
+- [x] **Step 3: Implement GREEN** with strict models, discriminated union, `Literal["proposed"]`, `Literal[False]` and explicit failure models.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加运营读模型领域契约`.
 
 ### Task 2: Tenant-Scoped Seeded Read Port
 
