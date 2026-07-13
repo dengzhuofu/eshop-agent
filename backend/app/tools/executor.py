@@ -275,6 +275,7 @@ class ToolExecutor:
                             "tenant_id": request.tenant_id,
                             "workflow_id": request.workflow_id,
                             "trace_id": request.trace_id,
+                            "attempts": 0,
                             "duration_ms": self._duration_ms(started_at),
                             "replayed": True,
                         },

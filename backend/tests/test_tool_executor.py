@@ -807,6 +807,7 @@ def test_same_idempotency_key_and_input_replays_success():
 
     assert first.ok is True and first.replayed is False
     assert second.ok is True and second.replayed is True
+    assert second.attempts == 0
     assert second.output == first.output
     assert calls == 1
 
