@@ -166,8 +166,8 @@ class SupportRagService:
 
 **Files:** Create domain/ports/test.
 
-- [ ] **Step 1: Write RED tests** for page 0, invalid SHA-256, missing tenant/ACL, fake locator, naive datetime and response/retrieval tenant mismatch.
-- [ ] **Step 2: Verify RED**:
+- [x] **Step 1: Write RED tests** for page 0, invalid SHA-256, missing tenant/ACL, fake locator, naive datetime and response/retrieval tenant mismatch.
+- [x] **Step 2: Verify RED**:
 
 ```powershell
 & 'C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pytest tests/test_support_rag.py -k "contract or locator" -v
@@ -175,8 +175,8 @@ class SupportRagService:
 
 Expected: collection FAIL because contracts are absent.
 
-- [ ] **Step 3: Implement GREEN** with controlled Literal types, validators and the frozen interfaces above.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 定义客服 RAG 契约与扩展端口`.
+- [x] **Step 3: Implement GREEN** with controlled Literal types, validators and the frozen interfaces above.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 定义客服 RAG 契约与扩展端口`.
 
 ### Task 2: Idempotent Ingestion And Tombstones
 
