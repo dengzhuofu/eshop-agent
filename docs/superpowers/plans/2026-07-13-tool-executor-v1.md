@@ -139,8 +139,8 @@ Attempt 使用 `TraceEventType.TOOL_CALL`，metadata 固定为：`request_id`、
 
 **Files:** Create schemas/test; modify registry.
 
-- [ ] **Step 1: Write RED tests** for retry bounds, duplicate tool names and v1 metadata/schema on `estimate_profit`, `score_supplier`, `validate_listing`.
-- [ ] **Step 2: Verify RED**:
+- [x] **Step 1: Write RED tests** for retry bounds, duplicate tool names and v1 metadata/schema on `estimate_profit`, `score_supplier`, `validate_listing`.
+- [x] **Step 2: Verify RED**:
 
 ```powershell
 & 'C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pytest tests/test_tool_executor.py -k "contract or registry or retry_policy" -v
@@ -148,8 +148,8 @@ Attempt 使用 `TraceEventType.TOOL_CALL`，metadata 固定为：`request_id`、
 
 Expected: FAIL because schemas/fields are absent.
 
-- [ ] **Step 3: Implement GREEN** with `ConfigDict(extra="forbid")`. Reuse `ProfitInput/ProfitEstimate`, `SupplierInput/SupplierScore`, `ListingDraft/ValidationResult` as registered model classes. Existing tool names, risks and permissions remain unchanged.
-- [ ] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加类型化工具契约与注册定义`.
+- [x] **Step 3: Implement GREEN** with `ConfigDict(extra="forbid")`. Reuse `ProfitInput/ProfitEstimate`, `SupplierInput/SupplierScore`, `ListingDraft/ValidationResult` as registered model classes. Existing tool names, risks and permissions remain unchanged.
+- [x] **Step 4: Verify and commit**; expected PASS. Commit: `feat: 增加类型化工具契约与注册定义`.
 
 ### Task 2: Handler Catalog And Schema Execution
 
