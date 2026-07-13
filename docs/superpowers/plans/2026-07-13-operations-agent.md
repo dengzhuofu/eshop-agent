@@ -137,11 +137,11 @@ Expected: collection FAIL because domain module is absent.
 
 **Files:** Create operations graph package; modify test.
 
-- [ ] **Step 1: Write RED tests** for ordered steps, insufficient data, normalized port failure, trace summaries without payload and deterministic replay IDs.
-- [ ] **Step 2: Verify RED** with `pytest tests/test_operations_agent.py -k "graph or trace or replay" -v`; expected FAIL.
-- [ ] **Step 3: Implement GREEN** with `START -> load_operations -> route -> detect_anomalies -> propose_actions -> complete -> END`. Route reads state only; nodes return explicit updates and import no write adapter, approval repository or executor.
-- [ ] **Step 4: Error semantics**: source/tenant/event/version conflict -> `failed`; all data absent/stale -> `insufficient_data` with no proposals; partially fresh data -> proposals only from fresh evidence.
-- [ ] **Step 5: Verify and commit**; run complete test file, expected PASS. Commit: `feat: 增加只读 Ops Agent 图`.
+- [x] **Step 1: Write RED tests** for ordered steps, insufficient data, normalized port failure, trace summaries without payload and deterministic replay IDs.
+- [x] **Step 2: Verify RED** with `pytest tests/test_operations_agent.py -k "graph or trace or replay" -v`; expected FAIL.
+- [x] **Step 3: Implement GREEN** with `START -> load_operations -> route -> detect_anomalies -> propose_actions -> complete -> END`. Route reads state only; nodes return explicit updates and import no write adapter, approval repository or executor.
+- [x] **Step 4: Error semantics**: source/tenant/event/version conflict -> `failed`; all data absent/stale -> `insufficient_data` with no proposals; partially fresh data -> proposals only from fresh evidence.
+- [x] **Step 5: Verify and commit**; run complete test file, expected PASS. Commit: `feat: 增加只读 Ops Agent 图`.
 
 ### Task 5: Progress Log And Quality Gate
 

@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.enums import Marketplace, RiskLevel
+from app.domain.enums import AgentRole, Marketplace, RiskLevel
 
 
 RecordType = Literal["order", "inventory", "shipment", "metric"]
@@ -27,6 +27,23 @@ FailureCode = Literal[
     "tenant_mismatch",
     "event_conflict",
     "listing_version_conflict",
+]
+OpsStep = Literal[
+    "load_operations",
+    "route",
+    "detect_anomalies",
+    "propose_actions",
+    "complete",
+]
+TraceFreshness = Literal["not_loaded", "empty", "all_stale", "partial", "fresh"]
+TraceDecision = Literal[
+    "loaded",
+    "analyze",
+    "failed",
+    "insufficient_data",
+    "detected",
+    "proposed",
+    "completed",
 ]
 
 ListingContentHash = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -210,6 +227,25 @@ class OpsActionProposal(OperationsModel):
     listing_content_hash: ListingContentHash
     sku: str = Field(min_length=1)
     rationale: str = Field(min_length=1)
+
+
+class OpsTraceSummary(OperationsModel):
+    trace_id: str = Field(min_length=1)
+    workflow_id: str = Field(min_length=1)
+    tenant_id: str = Field(min_length=1)
+    agent_role: Literal[AgentRole.OPS] = AgentRole.OPS
+    step: OpsStep
+    source_event_ids: list[str] = Field(default_factory=list)
+    listing_version_ids: list[str] = Field(default_factory=list)
+    anomaly_ids: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    proposal_ids: list[str] = Field(default_factory=list)
+    record_count: int = Field(default=0, ge=0)
+    fresh_record_count: int = Field(default=0, ge=0)
+    stale_record_count: int = Field(default=0, ge=0)
+    freshness: TraceFreshness
+    decision: TraceDecision
+    error_codes: list[FailureCode] = Field(default_factory=list)
 
 
 class OperationsReadError(RuntimeError):

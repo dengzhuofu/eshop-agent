@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -6,6 +7,9 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from app.agents.graphs.operations.routes import route_after_load
+from app.agents.graphs.operations.state import create_initial_operations_state
+from app.agents.graphs.operations.workflow import run_operations_agent
 from app.adapters.operations import SeededOperationsReadAdapter
 from app.domain.enums import Marketplace, RiskLevel
 from app.domain.operations import (
@@ -597,3 +601,164 @@ def test_proposal_mapping_is_high_risk_non_executable_and_replay_stable():
         and proposal.listing_content_hash
         for proposal in first
     )
+
+
+def test_graph_runs_ordered_read_only_steps_with_fresh_evidence_only():
+    state = run_operations_agent(
+        workflow_id="workflow-graph-1",
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+    )
+
+    assert state["status"] == "completed"
+    assert state["current_agent"].value == "ops"
+    assert state["completed_steps"] == [
+        "load_operations",
+        "route",
+        "detect_anomalies",
+        "propose_actions",
+        "complete",
+    ]
+    assert {item.anomaly_type for item in state["anomalies"]} == {
+        "low_stock",
+        "shipment_delay",
+        "conversion_drop",
+        "return_rate_rise",
+    }
+    assert state["proposals"]
+    assert all(proposal.execution_allowed is False for proposal in state["proposals"])
+    assert all(
+        "inventory-a-amazon-old" not in proposal.source_event_ids
+        for proposal in state["proposals"]
+    )
+
+
+def test_graph_returns_insufficient_data_for_empty_and_all_stale_sources():
+    empty_state = run_operations_agent(
+        workflow_id="workflow-empty",
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+        port=SeededOperationsReadAdapter([]),
+    )
+    stale_state = run_operations_agent(
+        workflow_id="workflow-stale",
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+        port=SeededOperationsReadAdapter(
+            [
+                _inventory_event(
+                    event_id="inventory-all-stale",
+                    observed_at=AS_OF - timedelta(days=1),
+                    received_at=AS_OF - timedelta(hours=23),
+                    available_quantity=0,
+                )
+            ]
+        ),
+    )
+
+    for state in (empty_state, stale_state):
+        assert state["status"] == "insufficient_data"
+        assert state["completed_steps"] == ["load_operations", "route", "complete"]
+        assert state["anomalies"] == []
+        assert state["evidence"] == []
+        assert state["proposals"] == []
+        assert state["failure"] is None
+
+
+def test_graph_normalizes_port_failure_without_proposals():
+    class ExplodingPort:
+        def read_orders(self, query):
+            raise RuntimeError("RAW_PLATFORM_SECRET_SHOULD_NOT_ESCAPE")
+
+        def read_inventory(self, query):
+            return []
+
+        def read_shipments(self, query):
+            return []
+
+        def read_metrics(self, query):
+            return []
+
+    state = run_operations_agent(
+        workflow_id="workflow-failed",
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+        port=ExplodingPort(),
+    )
+
+    assert state["status"] == "failed"
+    assert state["completed_steps"] == ["load_operations", "route", "complete"]
+    assert state["failure"].tenant_id == "tenant-a"
+    assert state["failure"].code == "source_read_failed"
+    assert "RAW_PLATFORM_SECRET" not in state["failure"].message
+    assert state["anomalies"] == []
+    assert state["proposals"] == []
+
+
+def test_graph_route_reads_state_without_mutation():
+    state = create_initial_operations_state(
+        workflow_id="workflow-route",
+        tenant_id="tenant-a",
+        query=OperationsReadQuery(tenant_id="tenant-a", as_of=AS_OF),
+    )
+    state["route_decision"] = "complete"
+    before = deepcopy(state)
+
+    decision = route_after_load(state)
+
+    assert decision == "complete"
+    assert state == before
+
+
+def test_trace_summaries_contain_ids_counts_decisions_not_payload():
+    state = run_operations_agent(
+        workflow_id="workflow-trace",
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+    )
+
+    assert [trace.step for trace in state["trace_summaries"]] == state["completed_steps"]
+    serialized = [trace.model_dump(mode="json") for trace in state["trace_summaries"]]
+    forbidden_keys = {
+        "records",
+        "orders",
+        "inventory",
+        "shipments",
+        "metrics",
+        "gross_revenue",
+        "current_value",
+        "baseline_value",
+        "rationale",
+    }
+    assert all(not forbidden_keys.intersection(trace) for trace in serialized)
+    assert "gross_revenue" not in json.dumps(serialized)
+    assert all(trace["tenant_id"] == "tenant-a" for trace in serialized)
+
+
+def test_graph_replay_ids_are_deterministic():
+    first = run_operations_agent(
+        workflow_id="workflow-replay",
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+    )
+    second = run_operations_agent(
+        workflow_id="workflow-replay",
+        tenant_id="tenant-a",
+        as_of=AS_OF,
+    )
+
+    assert [item.summary_id for item in first["summaries"]] == [
+        item.summary_id for item in second["summaries"]
+    ]
+    assert [item.anomaly_id for item in first["anomalies"]] == [
+        item.anomaly_id for item in second["anomalies"]
+    ]
+    assert [item.evidence_id for item in first["evidence"]] == [
+        item.evidence_id for item in second["evidence"]
+    ]
+    assert [item.proposal_id for item in first["proposals"]] == [
+        item.proposal_id for item in second["proposals"]
+    ]
+    assert [item.trace_id for item in first["trace_summaries"]] == [
+        item.trace_id for item in second["trace_summaries"]
+    ]
