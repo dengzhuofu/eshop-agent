@@ -1,7 +1,7 @@
 # 节点 19：客服 Routed RAG 证据基线
 
-日期：2026-07-13  
-分支：`codex/node-19-support-rag`  
+日期：2026-07-13
+分支：`codex/node-19-support-rag`
 基线：`106544d`
 
 ## 目标与范围
