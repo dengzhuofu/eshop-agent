@@ -147,9 +147,9 @@ Expected: collection FAIL because domain module is absent.
 
 **Files:** Create progress log.
 
-- [ ] Run focused `pytest tests/test_operations_agent.py -v`.
-- [ ] Run full `pytest -v` and repository-root `git diff --check`.
-- [ ] Request independent review against shared design, PRD section 7.10 and ADR 0002; resolve every Critical/Important issue.
-- [ ] Write Chinese progress log with ownership, version linkage, dedupe/freshness, graph flow, safety boundary, TDD evidence, real counts and Node 20 boundary.
-- [ ] Confirm `git diff --name-only 5cc8bc5...HEAD` contains only Node 18 files.
-- [ ] Commit and push: `docs: 记录第十八节点运营 Agent 进展`; `git push -u origin codex/node-18-operations-agent`.
+- [x] Run focused `pytest tests/test_operations_agent.py -v`.
+- [x] Run full `pytest -v` and repository-root `git diff --check`.
+- [ ] Request independent review against shared design, PRD section 7.10 and ADR 0002; resolve every Critical/Important issue. 当前环境无独立 reviewer/subagent 工具，已完成逐项自查并在进度日志中记录待主线程复核。
+- [x] Write Chinese progress log with ownership, version linkage, dedupe/freshness, graph flow, safety boundary, TDD evidence, real counts and Node 20 boundary.
+- [x] Confirm `git diff --name-only 106544d...HEAD` contains only Node 18 files. `106544d` 为用户指定主线基线；旧比较点 `5cc8bc5` 会包含基线自带的其他节点计划。
+- [x] Commit and push: `docs: 记录第十八节点运营 Agent 进展`; `git push -u origin codex/node-18-operations-agent`.
