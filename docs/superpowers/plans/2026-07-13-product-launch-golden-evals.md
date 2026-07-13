@@ -97,11 +97,11 @@ tiktok_shop f07756f6749b0178eed6d3f317b86b054c7da8778984430d0b5ded26c35a8cff
 
 **Files:** Create `backend/app/agents/evaluation/results.py`; create `backend/tests/test_product_launch_golden.py`.
 
-- [ ] **Step 1: Write RED tests**
+- [x] **Step 1: Write RED tests**
 
 Add `test_evaluation_result_is_tenant_scoped_and_score_bounded` and `test_evaluation_summary_hash_is_canonical_and_deterministic`.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run from `backend/`:
 
@@ -111,11 +111,11 @@ Run from `backend/`:
 
 Expected: collection fails because `results.py` does not exist.
 
-- [ ] **Step 3: Implement GREEN**
+- [x] **Step 3: Implement GREEN**
 
 Implement strict result/summary models and `canonical_summary_hash(summary) -> str` using sorted compact JSON and SHA-256.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Re-run the focused command; expected PASS. Commit: `feat: 增加 Product Launch 评估结果模型`.
 
